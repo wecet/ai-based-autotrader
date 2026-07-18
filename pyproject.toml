@@ -1,0 +1,13 @@
+[project]
+name = "ai-trading-playground"
+version = "0.1.0"
+description = "A playground for experimenting with AI-powered trading strategies."
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "alpaca-py",
+    "numpy",
+    "dotenv",
+]
+
+[tool.uv]
+package = false
