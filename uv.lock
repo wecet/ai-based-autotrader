@@ -15,6 +15,7 @@ dependencies = [
     { name = "alpaca-py" },
     { name = "dotenv" },
     { name = "numpy" },
+    { name = "pydantic" },
 ]
 
 [package.metadata]
@@ -22,6 +23,7 @@ requires-dist = [
     { name = "alpaca-py" },
     { name = "dotenv" },
     { name = "numpy" },
+    { name = "pydantic" },
 ]
 
 [[package]]
