@@ -13,6 +13,7 @@ class MODELS_(enum.Enum):
 
 class Config(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(
+        arbitrary_types_allowed=True,  # Accept Account instances as field values
         strict=True,           # Disables type coercion
         extra='forbid',        # Rejects undefined fields
         validate_default=True  # Validates default values
