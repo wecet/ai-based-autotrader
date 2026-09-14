@@ -10,15 +10,26 @@ import utils
 
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):
-    monkeypatch.setattr(utils, "load_dotenv", lambda: None)
     monkeypatch.setenv("APCA_API_KEY_ID", "test-key")
     monkeypatch.setenv("APCA_API_SECRET_KEY", "test-secret")
 
-    def blocked(*args, **kwargs):
-        raise AssertionError("Tests must not connect to the network")
+    original_socket = socket.socket
+    original_load_dotenv = utils.load_dotenv
 
-    monkeypatch.setattr(socket.socket, "connect", blocked)
-    monkeypatch.setattr(socket.socket, "connect_ex", blocked)
+    class OfflineSocket(original_socket):
+        def connect(self, *args, **kwargs):
+            raise AssertionError("Tests must not connect to the network")
+
+        def connect_ex(self, *args, **kwargs):
+            raise AssertionError("Tests must not connect to the network")
+
+    utils.load_dotenv = lambda: None
+    socket.socket = OfflineSocket
+    try:
+        yield
+    finally:
+        socket.socket = original_socket
+        utils.load_dotenv = original_load_dotenv
 
 
 @pytest.fixture(scope="session")

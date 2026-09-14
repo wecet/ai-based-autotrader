@@ -1,0 +1,29 @@
+services:
+  trader:
+    build:
+      context: .
+      dockerfile: build_files/trader.dockerfile
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      TRADER_STATE_DIR: /app/state
+    volumes:
+      - trader-state:/app/state
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  trader-state:

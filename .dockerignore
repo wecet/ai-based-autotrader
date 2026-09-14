@@ -1,0 +1,10 @@
+**
+!pyproject.toml
+!uv.lock
+!src/
+!src/**
+src/**/__pycache__/
+src/**/*.pyc
+src/**/.DS_Store
+!build_files/
+!build_files/trader.dockerfile
