@@ -9,10 +9,11 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH=/app/src \
-    TRADER_STATE_DIR=/app/state
+    TRADER_STATE_DIR=/app/state \
+    TRADER_CONTROL_DIR=/app/control
 WORKDIR /app
 RUN groupadd --gid 10001 trader && useradd --uid 10001 --gid trader --no-create-home trader \
-    && mkdir /app/state && chown trader:trader /app/state
+    && mkdir /app/state /app/control && chown trader:trader /app/state /app/control
 COPY --from=dependencies /app/.venv /app/.venv
 COPY src/ ./src/
 USER trader

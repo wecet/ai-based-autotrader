@@ -2,8 +2,8 @@
 
 A persistent, long-only Alpaca **paper-trading** service using a cross-sectional
 ranking model. It evaluates trading opportunities between waits of 60 seconds,
-uses completed daily bars for its signals, and submits at most **10 order
-attempts per New York trading day**. The intended expanded universe contains
+uses completed daily bars for its signals, and defaults to at most **10 order
+attempts per New York trading day**, adjustable in the dashboard. The intended expanded universe contains
 50 equity ETFs and 100 individual stocks; the actual candidates come from your
 `TRADER_UNIVERSE` configuration.
 
@@ -17,6 +17,17 @@ docker compose up -d --build
 docker compose ps
 docker compose logs -f trader
 ```
+
+Open the [Control room](http://localhost:8080) to edit the universe, daily order
+budget, order amounts, and exposure limits without restarting the trader. Unlock
+it with the separate dashboard key:
+
+```sh
+docker compose exec dashboard cat /app/control/dashboard.key
+```
+
+See the [dashboard guide](docs/dashboard.md) for live-update timing, access,
+and the shared runtime settings file.
 
 Docker must remain running on an awake host. The service waits through closed
 markets and restarts after process failures unless explicitly stopped. Its
@@ -39,6 +50,7 @@ profitability or successful order fills.
 
 Start with the [documentation index](docs/README.md).
 
+- [Live settings dashboard](docs/dashboard.md): edit controls and see when they apply.
 - [Configuration](docs/configuration.md): environment variables and universe format.
 - [Universe](docs/universe.md): ETF selection, stock sampling, benchmark groups, and eligibility.
 - [Trading behavior](docs/trading.md): data, ranking, portfolio targets, and order limits.

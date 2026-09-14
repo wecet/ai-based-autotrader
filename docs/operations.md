@@ -2,6 +2,11 @@
 
 ## Build and start
 
+The trader container is named `trader` and uses image `trader:latest`.
+The dashboard container is named `dashboard` and uses image
+`trader-dashboard:latest`. These explicit container names must be unique on the
+Docker host; the persistent volumes remain scoped to the Compose project.
+
 Configure the root `.env` using [configuration](configuration.md). Docker Compose
 uses [docker-compose.yml](../docker-compose.yml) and
 [trader.dockerfile](../build_files/trader.dockerfile):
@@ -16,7 +21,8 @@ docker compose logs --tail=100 -f trader
 The image uses Python 3.13 and dependencies from `uv.lock`, excluding development
 dependencies. It runs as UID/GID 10001 with a read-only root filesystem, writable
 state volume and temporary directory, dropped capabilities, and an init process.
-No ports are exposed. Logs rotate at 10 MB with up to three files.
+The trader exposes no ports. The companion dashboard publishes port 8080 only
+on host loopback; see [dashboard access](dashboard.md). Logs rotate at 10 MB with up to three files.
 
 ## Stop, resume, and update
 
@@ -26,6 +32,7 @@ No ports are exposed. Logs rotate at 10 MB with up to three files.
 | Resume | `docker compose up -d trader` |
 | Apply changed `.env` | `docker compose up -d --force-recreate trader` |
 | Apply source/dependency changes | `docker compose up -d --build trader` |
+| Open control room | http://localhost:8080 |
 | Check heartbeat now | `docker compose exec trader python src/main.py --healthcheck` |
 
 Run one instance per paper account. A file lock prevents concurrent processes
@@ -60,12 +67,17 @@ in-progress cycle may continue until completion or deadline. Compose allows
 
 ## Persistent state
 
+The dashboard writes editable controls to a separate trader-control volume.
+The trader records its last applied revision in applied-settings.json in the
+state volume. Preserve both volumes; the dashboard mounts trading state read-only.
+
 Compose stores these files in its project-scoped `trader-state` named volume:
 
 | File | Purpose |
 | --- | --- |
 | `orders.json` | Current recorded day's attempted target fingerprints |
 | `heartbeat.json` | Recent runner health; removed on normal loop exit |
+| `applied-settings.json` | Last settings revision loaded by the trader |
 | `runner.lock` | Exclusive process lock for this state directory |
 
 The journal is written through a temporary file and replacement. Preserve the
@@ -84,7 +96,7 @@ broker before resuming. Do not clear a corrupt journal just to silence an error.
 | Market closed | Normal waiting state; the broker clock controls trading |
 | Waiting for open orders | Check all account orders, including manually placed ones |
 | No new model-approved trade | Costs, targets, duplicate suppression, asset eligibility, or buying power may exclude orders |
-| Daily limit reached | Wait for the next broker date; do not reset the journal |
+| Daily limit reached | Wait for the next broker date or adjust the budget in the dashboard; do not reset the journal |
 | Insufficient/stale history | Check feed access, ticker history, and exact session alignment with SPY |
 | Insufficient liquid stocks | IEX venue volume may fail the $5 million filter; review feed and candidates |
 | Cycle deadline exceeded | Check broker latency and training cost for the configured universe |

@@ -12,6 +12,23 @@ class DailySignals:
         self.model = model if model is not None else self.cs.CrossSectionalModel()
         self.signal_date = None
         self.ranked = []
+        self.maximum_total_exposure = .5
+        self.maximum_sector_exposure = .2
+        self.maximum_position = .1
+        self.top_n = 5
+
+    def configure(self, settings):
+        from alpaca.data.enums import DataFeed
+        if self.universe != settings.universe or self.history.feed != DataFeed(settings.feed):
+            self.universe = dict(settings.universe)
+            self.history.feed = DataFeed(settings.feed)
+            self.signal_date = None
+            self.ranked = []
+        self.model.minimum_order_notional = settings.minimum_order_notional
+        self.maximum_total_exposure = settings.maximum_total_exposure
+        self.maximum_sector_exposure = settings.maximum_sector_exposure
+        self.maximum_position = settings.maximum_position
+        self.top_n = settings.top_n
 
     def refresh(self, now):
         today = now.astimezone(NY).date()
@@ -34,4 +51,6 @@ class DailySignals:
         retained = sum(weight for symbol, weight in weights.items() if symbol not in eligible)
         return self.model.construct_portfolio(
             self.ranked, current_weights=weights, portfolio_value=equity,
-            maximum_total_exposure=max(0, .5 - retained))
+            maximum_total_exposure=max(0, self.maximum_total_exposure - retained),
+            maximum_sector_exposure=self.maximum_sector_exposure,
+            maximum_position=self.maximum_position, top_n=self.top_n)

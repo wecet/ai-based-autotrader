@@ -1,5 +1,7 @@
 services:
   trader:
+    container_name: trader
+    image: trader:latest
     build:
       context: .
       dockerfile: build_files/trader.dockerfile
@@ -9,8 +11,10 @@ services:
       - .env
     environment:
       TRADER_STATE_DIR: /app/state
+      TRADER_CONTROL_DIR: /app/control
     volumes:
       - trader-state:/app/state
+      - trader-control:/app/control
     stop_grace_period: 30s
     read_only: true
     tmpfs:
@@ -25,5 +29,55 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  dashboard:
+    container_name: dashboard
+    image: trader-dashboard:latest
+    build:
+      context: .
+      dockerfile: build_files/trader.dockerfile
+    command: ["python", "-m", "dashboard"]
+    restart: unless-stopped
+    init: true
+    environment:
+      DASHBOARD_BIND: 0.0.0.0
+      DASHBOARD_PORT: 8080
+      TRADER_STATE_DIR: /app/state
+      TRADER_CONTROL_DIR: /app/control
+      # Explicit allowlist: broker credentials are not passed to the dashboard.
+      TRADER_UNIVERSE: '${TRADER_UNIVERSE:-}'
+      TRADER_DATA_FEED: '${TRADER_DATA_FEED:-iex}'
+      TRADER_ENABLED: '${TRADER_ENABLED:-true}'
+      TRADER_MAX_DAILY_TRADES: '${TRADER_MAX_DAILY_TRADES:-10}'
+      TRADER_MIN_ORDER_NOTIONAL: '${TRADER_MIN_ORDER_NOTIONAL:-10}'
+      TRADER_MAX_ORDER_NOTIONAL: '${TRADER_MAX_ORDER_NOTIONAL:-null}'
+      TRADER_MAX_TOTAL_EXPOSURE: '${TRADER_MAX_TOTAL_EXPOSURE:-0.5}'
+      TRADER_MAX_SECTOR_EXPOSURE: '${TRADER_MAX_SECTOR_EXPOSURE:-0.2}'
+      TRADER_MAX_POSITION: '${TRADER_MAX_POSITION:-0.1}'
+      TRADER_TOP_N: '${TRADER_TOP_N:-5}'
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - trader-state:/app/state:ro
+      - trader-control:/app/control
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
+  trader-control:
   trader-state:

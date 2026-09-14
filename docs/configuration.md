@@ -5,6 +5,11 @@ also loads `.env`; existing process variables take precedence. Docker Compose
 passes the root `.env` file into the container. Credentials are not built into
 the image.
 
+The [live dashboard](dashboard.md) edits the controls below through a shared
+runtime settings file. After the first dashboard save, that file takes precedence
+for all editable controls. The host root .env remains the source of credentials
+and startup-only settings.
+
 ## Required settings
 
 | Variable | Meaning |
@@ -39,7 +44,7 @@ values are supported by dotenv and Compose. Each symbol must occur only once:
 JSON parsing otherwise silently retains the last occurrence. The loader strips
 whitespace and uppercases symbols and proxies, so avoid case-only duplicates too.
 
-The loader requires at least two candidates. The data pipeline subsequently
+The loader requires 2–500 unique candidates and IEX or SIP as the data feed. The data pipeline subsequently
 requires at least two eligible symbols with sufficient aligned history. A
 benchmark appearing only as a value supplies features; it becomes a trade
 candidate only if it also appears as a key.
@@ -70,9 +75,30 @@ IEX volume is specific to that venue. It can cause candidates to fail the model'
 liquidity filter. SIP requires an appropriate Alpaca subscription. Neither the
 universe list nor offline tests verify your account's data access.
 
+## Editable trading defaults
+
+These optional root .env values seed the dashboard and trader until a runtime
+settings file is saved. Exposure values here are fractions; the page shows percentages.
+
+| Variable | Default |
+| --- | --- |
+| TRADER_ENABLED | true |
+| TRADER_MAX_DAILY_TRADES | 10 |
+| TRADER_MIN_ORDER_NOTIONAL | 10 |
+| TRADER_MAX_ORDER_NOTIONAL | null (no cap) |
+| TRADER_MAX_TOTAL_EXPOSURE | 0.5 |
+| TRADER_MAX_SECTOR_EXPOSURE | 0.2 |
+| TRADER_MAX_POSITION | 0.1 |
+| TRADER_TOP_N | 5 |
+| TRADER_CONTROL_DIR | state/control locally; /app/control in Compose |
+
+Use the dashboard for live changes to these controls, the universe, and the feed.
+Cycle timing, retry settings, credentials, and state locations remain startup-only.
+
 ## Applying changes
 
-Local execution reads settings on startup; restart it after editing `.env`.
+Root .env changes require restarting local execution. Dashboard changes apply
+before the next cycle without a restart; saved runtime controls override root .env.
 For an existing Compose deployment, recreate the service to apply environment
 changes:
 

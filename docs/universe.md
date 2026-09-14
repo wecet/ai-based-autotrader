@@ -3,7 +3,7 @@
 The expanded selection prepared on 2026-09-14 contains **150 distinct
 candidates: 50 equity ETFs and 100 individual stocks**. It is a static research
 selection, not an automatically maintained index or a guarantee that 150 symbols
-will pass the model's filters. The runtime uses whatever JSON is present in
+will pass the model's filters. The runtime uses the saved dashboard universe, or initially the JSON in
 `TRADER_UNIVERSE`; it does not enforce these counts or fetch the selection list.
 
 ## ETF selection
@@ -22,7 +22,8 @@ SPYG IVE DFAC IWB QUAL VONG JEPI DIA SOXX SCHB
 ```
 
 Rankings and tickers can change. Updating this snapshot is a deliberate
-configuration change, not something the service does at startup.
+configuration change, not something the service does at startup. Edit the active candidate list in the
+[dashboard](dashboard.md); saving invalidates the cached ranking.
 
 ## Individual stocks
 
@@ -77,7 +78,8 @@ Recent listings, ticker changes, missing data, low prices, and insufficient
 venue volume can exclude candidates. Before an order, Alpaca must report the
 asset as tradable and fractionable.
 
-150 candidates do not mean 150 positions. The model selects at most five target
-positions and the runner attempts at most 10 orders per day. Existing holdings
+150 candidates do not mean 150 positions. By default the model selects at most five target
+positions and the runner attempts at most 10 orders per day. Both limits are
+editable in the dashboard. Existing holdings
 outside the eligible universe are retained and reduce the new allocation budget.
 See [trading behavior](trading.md) for the exact limits.

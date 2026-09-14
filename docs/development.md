@@ -22,6 +22,8 @@ Configuration is supplied through environment variables.
 | --- | --- |
 | [main.py](../src/main.py) | Entry point, process lock, startup and exit status |
 | [runtime.py](../src/runtime.py) | Loop, deadlines, signals, heartbeat and failure policy |
+| [live_settings.py](../src/live_settings.py) | Validated controls, runtime dotenv storage, atomic saves and revision checks |
+| [dashboard/app.py](../src/dashboard/app.py) | Authenticated HTTP controls and read-only runner status |
 | [trader.py](../src/trader.py) | Broker checks and coordination of one trading cycle |
 | [market_data.py](../src/market_data.py) | Alpaca history retrieval, conversion, and session alignment |
 | [signals.py](../src/signals.py) | Daily training, cached ranking, and target construction |
@@ -91,6 +93,8 @@ automated suite locally.
 | `test_runtime.py` | Repeated cycles, deadlines, retries, heartbeat and subprocess SIGTERM |
 | `test_accounts.py` | Credentials, paper client construction, asset lookup and errors |
 | `test_components.py` | Independent component injection, journal limits, account reuse, and universe validation |
+| `test_dashboard.py` | HTTP authentication, validation, persistence, status and concurrent edit conflicts |
+| `test_live_settings.py` | Live limits, pause/resume, order caps, cache invalidation and unchanged daily counts |
 | `test_config.py` | Valid account configuration and strict field validation |
 | `test_templates.py` | Buy/sell/hold dispatch and conflicting decisions |
 
@@ -116,3 +120,6 @@ Follow [AGENTS.md](../AGENTS.md) and the persistent
 access and assignments; avoid dynamic attribute helpers and `argparse`. Restore
 test replacements in `finally` blocks or fixture teardown. Preserve the offline
 suite and health-check interface when changing startup behavior.
+
+Run the companion UI with `PYTHONPATH=src uv run python -m dashboard`. See
+[the dashboard guide](dashboard.md) for its access key and API.

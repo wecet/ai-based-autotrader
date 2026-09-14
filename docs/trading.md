@@ -4,8 +4,11 @@
 
 The runner performs these checks sequentially:
 
+Before these checks, the runner reloads saved dashboard settings and returns
+without broker calls if trading is paused.
+
 1. Read Alpaca's clock; wait if the market is closed.
-2. Read the persisted journal for the New York date; wait if 10 attempts are used.
+2. Read the persisted journal for the New York date; wait if the configured daily budget is used.
 3. Wait if the account has any open orders, including orders from other clients.
 4. Check account status, positive finite equity, and finite long-only holdings.
 5. Refresh the model if this is the first eligible cycle of the day.
@@ -40,7 +43,8 @@ in target weight times current account equity.
 
 ## Allocation and decisions
 
-These are current code defaults, not environment settings:
+These are the initial defaults. The dashboard can change allocation and order
+limits; cost estimates and safety margin remain model defaults:
 
 | Rule | Value |
 | --- | --- |
@@ -49,6 +53,7 @@ These are current code defaults, not environment settings:
 | Maximum target per benchmark group | 20% |
 | Maximum total target exposure | 50% |
 | Minimum order notional | $10 |
+| Maximum order notional | No cap |
 | Estimated spread | 0.05% |
 | Estimated slippage | 0.05% |
 | Safety margin | 0.20% |
@@ -74,12 +79,15 @@ Rejected orders and ambiguous submission timeouts consume an attempt, and the
 same fingerprint is not retried that day. This favors avoiding duplicate orders
 over automatically completing an uncertain submission.
 
-The journal caps this service at 10 attempts per New York calendar date during
+The journal defaults to capping this service at 10 attempts per New York calendar date during
 open-market cycles. A newer broker date starts a new logical budget. Corrupt
 state or a journal date ahead of the broker clock causes an error rather than
 silently resetting the budget. The journal is not a fill ledger, and other
 programs' submissions do not count toward this cap.
 
 Several trades per day are possible, but the service does not promise to trade
-or use all 10 slots. A changed target can produce a different fingerprint; an
+or use its entire daily budget. A changed target can produce a different fingerprint; an
 unchanged one remains suppressed even if its earlier order failed.
+
+See [live controls](dashboard.md) for capped-order behavior, preserved daily
+counts after limit changes, pause timing, and settings persistence.
