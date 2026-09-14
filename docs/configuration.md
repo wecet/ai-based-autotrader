@@ -1,0 +1,84 @@
+# Configuration
+
+The service reads its configuration from environment variables. Local startup
+also loads `.env`; existing process variables take precedence. Docker Compose
+passes the root `.env` file into the container. Credentials are not built into
+the image.
+
+## Required settings
+
+| Variable | Meaning |
+| --- | --- |
+| `APCA_API_KEY_ID` | Alpaca paper-account API key |
+| `APCA_API_SECRET_KEY` | Matching paper-account secret |
+| `TRADER_UNIVERSE` | JSON object mapping candidate symbols to benchmark ETF symbols |
+
+`Account.login()` explicitly selects paper trading. There is no environment
+setting that enables a live-money account.
+
+Create or edit `.env` without overwriting existing credentials. This minimal
+configuration illustrates the syntax; it does not replace the expanded universe:
+
+```dotenv
+APCA_API_KEY_ID=your-paper-api-key
+APCA_API_SECRET_KEY=your-paper-secret-key
+TRADER_UNIVERSE='{
+  "AAPL": "XLK",
+  "MSFT": "XLK",
+  "JPM": "XLF"
+}'
+TRADER_DATA_FEED=iex
+TRADER_POLL_SECONDS=60
+TRADER_CYCLE_TIMEOUT_SECONDS=120
+TRADER_MAX_FAILURES=3
+```
+
+Keep the JSON inside a single pair of single quotes. JSON keys and values use
+double quotes; JSON does not allow comments or trailing commas. Multiline quoted
+values are supported by dotenv and Compose. Each symbol must occur only once:
+JSON parsing otherwise silently retains the last occurrence. The loader strips
+whitespace and uppercases symbols and proxies, so avoid case-only duplicates too.
+
+The loader requires at least two candidates. The data pipeline subsequently
+requires at least two eligible symbols with sufficient aligned history. A
+benchmark appearing only as a value supplies features; it becomes a trade
+candidate only if it also appears as a key.
+
+## Runtime settings
+
+| Variable | Default | Behavior |
+| --- | --- | --- |
+| `TRADER_DATA_FEED` | `iex` | Alpaca historical equity data feed |
+| `TRADER_POLL_SECONDS` | `60` | Wait after each completed or recoverable failed cycle |
+| `TRADER_CYCLE_TIMEOUT_SECONDS` | `120` | Deadline covering initialization and each cycle |
+| `TRADER_MAX_FAILURES` | `3` | Consecutive ordinary cycle failures before process exit |
+| `TRADER_STATE_DIR` | `state` locally | Writable directory for journal, heartbeat, and lock |
+
+Timing values must be finite and positive; the failure limit must be a positive
+integer. A cycle takes time itself, so the interval between cycle starts is
+longer than the configured wait.
+
+Compose overrides `TRADER_STATE_DIR` with `/app/state` and mounts a named volume
+there. Changing that variable in `.env` does not change the Compose mount.
+
+Keep cycle timeout below the fixed 180-second heartbeat age limit. A larger
+universe increases download and training work. Measure it before changing the
+timeout; longer deadlines also require reviewing health checks and shutdown
+settings in the implementation.
+
+IEX volume is specific to that venue. It can cause candidates to fail the model's
+liquidity filter. SIP requires an appropriate Alpaca subscription. Neither the
+universe list nor offline tests verify your account's data access.
+
+## Applying changes
+
+Local execution reads settings on startup; restart it after editing `.env`.
+For an existing Compose deployment, recreate the service to apply environment
+changes:
+
+```sh
+docker compose up -d --force-recreate trader
+```
+
+A plain container restart does not load new environment values. Rebuild as well
+when source code or dependencies change. See [operations](operations.md).

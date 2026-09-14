@@ -1,4 +1,6 @@
-Run from the repository root (Python 3.13):
+# Automated tests
+
+Run from the repository root with Python 3.13:
 
 ```sh
 uv sync --group dev
@@ -6,14 +8,9 @@ uv run pytest
 uv run pytest --cov --cov-report=term-missing
 ```
 
-In VS Code, install the recommended Python extension, select the project's
-`.venv` interpreter if prompted, then use the Testing sidebar to discover,
-run, or debug tests. Pytest reads its settings from `pyproject.toml`.
+VS Code's Testing sidebar uses the project's pytest configuration and `.venv`
+interpreter. Tests cover the model, accounts, persistent runtime, broker guards,
+and restart-safe order limits with synthetic data and mock clients.
 
-Tests use synthetic daily bars and mocked Alpaca clients. The shared fixture
-replaces credentials, disables `.env` loading, and rejects socket connections.
-No real account or market data is required. Tests cover feature calculations,
-point-in-time datasets, chronological splitting, regression and calibration,
-portfolio limits, trade decisions, execution guards, account utilities, and
-configuration validation. They do not validate strategy profitability or live
-broker integration.
+See [development and testing](../docs/development.md) for the module guide,
+offline-test boundaries, debugging setup, and coding conventions.

@@ -1,0 +1,96 @@
+# Deployment and operations
+
+## Build and start
+
+Configure the root `.env` using [configuration](configuration.md). Docker Compose
+uses [docker-compose.yml](../docker-compose.yml) and
+[trader.dockerfile](../build_files/trader.dockerfile):
+
+```sh
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+docker compose logs --tail=100 -f trader
+```
+
+The image uses Python 3.13 and dependencies from `uv.lock`, excluding development
+dependencies. It runs as UID/GID 10001 with a read-only root filesystem, writable
+state volume and temporary directory, dropped capabilities, and an init process.
+No ports are exposed. Logs rotate at 10 MB with up to three files.
+
+## Stop, resume, and update
+
+| Action | Command |
+| --- | --- |
+| Stop intentionally | `docker compose stop trader` |
+| Resume | `docker compose up -d trader` |
+| Apply changed `.env` | `docker compose up -d --force-recreate trader` |
+| Apply source/dependency changes | `docker compose up -d --build trader` |
+| Check heartbeat now | `docker compose exec trader python src/main.py --healthcheck` |
+
+Run one instance per paper account. A file lock prevents concurrent processes
+sharing the same state directory, but does not coordinate different volumes or
+other broker clients.
+
+## Health and recovery
+
+After a successful cycle, the application writes a healthy heartbeat. It
+refreshes that heartbeat during waits in chunks of at most 30 seconds. Closed
+markets, pending orders, a used daily budget, and no approved trade all count as
+successful idle cycles. Health therefore indicates recent runner progress, not
+that orders have filled or every broker endpoint was checked.
+
+The health command exits 0 only when the heartbeat is healthy and between 0 and
+180 seconds old. Missing, malformed, stale, or unhealthy state yields exit 1.
+It does not contact Alpaca or load `.env`; locally, export `TRADER_STATE_DIR`
+when checking a custom state location.
+
+Docker checks every 30 seconds, with a five-second check timeout, a 60-second
+startup grace period, and three failed checks before marking the container
+unhealthy. An unhealthy status alone does not restart it. The application exits
+after three consecutive ordinary cycle failures by default, or immediately
+when its 120-second cycle deadline interrupts a cycle. Successful cycles reset
+the failure counter. Initialization and login are also inside the deadline.
+
+Compose's `unless-stopped` policy restarts an exited container unless explicitly
+stopped. The host and Docker must remain available; host sleep or loss of network
+can interrupt service. SIGTERM/SIGINT requests a stop, interrupting waits; an
+in-progress cycle may continue until completion or deadline. Compose allows
+30 seconds before forcibly terminating a stuck shutdown.
+
+## Persistent state
+
+Compose stores these files in its project-scoped `trader-state` named volume:
+
+| File | Purpose |
+| --- | --- |
+| `orders.json` | Current recorded day's attempted target fingerprints |
+| `heartbeat.json` | Recent runner health; removed on normal loop exit |
+| `runner.lock` | Exclusive process lock for this state directory |
+
+The journal is written through a temporary file and replacement. Preserve the
+volume across updates and restarts. Removing it, using `docker compose down -v`,
+or changing the Compose project name can give the service an empty journal and
+lose its daily count. Stop the service before backing up state. Restoring an
+older journal can omit attempts made afterward; reconcile those against the
+broker before resuming. Do not clear a corrupt journal just to silence an error.
+
+## Troubleshooting
+
+| Log or symptom | Meaning and next check |
+| --- | --- |
+| Credentials missing / login failed | Check matching paper credentials in the service environment |
+| Universe configuration error | Check JSON syntax, string values, and at least two candidates |
+| Market closed | Normal waiting state; the broker clock controls trading |
+| Waiting for open orders | Check all account orders, including manually placed ones |
+| No new model-approved trade | Costs, targets, duplicate suppression, asset eligibility, or buying power may exclude orders |
+| Daily limit reached | Wait for the next broker date; do not reset the journal |
+| Insufficient/stale history | Check feed access, ticker history, and exact session alignment with SPY |
+| Insufficient liquid stocks | IEX venue volume may fail the $5 million filter; review feed and candidates |
+| Cycle deadline exceeded | Check broker latency and training cost for the configured universe |
+| Invalid order state | Preserve the journal and reconcile with broker orders before repair |
+| Unhealthy / restarting | Inspect the preceding cycle exception in logs, not only container status |
+
+The 150-symbol universe has not been established as a successful live-data
+workload merely by passing offline tests. Download and training time depend on
+broker access and the host.
