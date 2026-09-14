@@ -22,15 +22,54 @@ Configuration is supplied through environment variables.
 | --- | --- |
 | [main.py](../src/main.py) | Entry point, process lock, startup and exit status |
 | [runtime.py](../src/runtime.py) | Loop, deadlines, signals, heartbeat and failure policy |
-| [trader.py](../src/trader.py) | Data retrieval, daily model refresh, order journal and execution |
+| [trader.py](../src/trader.py) | Broker checks and coordination of one trading cycle |
+| [market_data.py](../src/market_data.py) | Alpaca history retrieval, conversion, and session alignment |
+| [signals.py](../src/signals.py) | Daily training, cached ranking, and target construction |
+| [order_journal.py](../src/order_journal.py) | Persistent attempt reservations, daily cap, and order IDs |
+| [execution.py](../src/execution.py) | Asset eligibility, cost decisions, and order submission |
+| [model_loader.py](../src/model_loader.py) | Shared loader for the legacy model filename |
 | [cross-sectional.py](../src/models/cross-sectional.py) | Features, labels, ridge estimator, ranking and allocation |
-| [utils.py](../src/utils.py) | Paper account login and asset utilities |
+| [utils.py](../src/utils.py) | Shared `Account` connection and `Ticker` asset lookup |
 | [templates.py](../src/modules/templates.py) | Abstract model/trader interfaces and decision dispatch |
-| [config.py](../src/config.py) | Typed model/account configuration; not the runtime environment loader |
+| [config.py](../src/config.py) | Typed model/account configuration and `TraderSettings` environment parsing |
 
 The existing hyphenated model filename is loaded using `importlib`. Production
 execution uses `Autotrader`; the model module also contains a
 `CrossSectionalTrader` helper, which is not the persistent service's order path.
+
+## Component boundaries
+
+`Account` is used by `Autotrader.from_environment()` to create one paper-trading
+connection. `Ticker(symbol, account)` receives that existing account; constructing
+it neither logs in nor opens another connection. `OrderExecutor` uses `Ticker`
+for asset eligibility checks before reserving and submitting an order.
+
+`Autotrader` supplies default components, or accepts explicit `signals`,
+`journal`, and `executor` objects. Tests and alternate implementations can replace
+these independently. `DailySignals` accepts a history provider and an optional
+estimator-backed model. `HistoricalData` receives its data client rather than
+constructing credentials or authenticating itself.
+
+```mermaid
+flowchart TD
+    Main[main.py] --> Runtime[Persistent runtime]
+    Runtime --> Trader[Autotrader coordinator]
+    Trader --> Signals[DailySignals]
+    Signals --> History[HistoricalData]
+    Signals --> Model[Cross-sectional model]
+    Trader --> Executor[OrderExecutor]
+    Trader --> Journal[OrderJournal]
+    Executor --> Journal
+    Executor --> Ticker[Ticker]
+    Ticker --> Account[Shared Account]
+    Executor --> Account
+```
+
+The environment factory wires concrete Alpaca dependencies together. Scheduling
+remains in `runtime.py`; data loading does not submit orders, signal generation
+does not modify the journal, and the journal does not contact Alpaca. Configuration
+is validated before the factory logs in. Logging configuration belongs to the
+entry point, not an import of `utils.py`.
 
 ## Run tests
 
@@ -51,6 +90,7 @@ automated suite locally.
 | `test_autotrader.py` | Broker guards, daily data pipeline, order cap and restart deduplication |
 | `test_runtime.py` | Repeated cycles, deadlines, retries, heartbeat and subprocess SIGTERM |
 | `test_accounts.py` | Credentials, paper client construction, asset lookup and errors |
+| `test_components.py` | Independent component injection, journal limits, account reuse, and universe validation |
 | `test_config.py` | Valid account configuration and strict field validation |
 | `test_templates.py` | Buy/sell/hold dispatch and conflicting decisions |
 

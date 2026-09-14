@@ -1,8 +1,5 @@
 """Offline fixtures and loader for the existing hyphenated model filename."""
-import importlib.util
-from pathlib import Path
 import socket
-import sys
 
 import pytest
 import utils
@@ -34,9 +31,5 @@ def offline(monkeypatch):
 
 @pytest.fixture(scope="session")
 def cs():
-    path = Path(__file__).resolve().parents[1] / "src/models/cross-sectional.py"
-    spec = importlib.util.spec_from_file_location("cross_sectional", path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    from model_loader import load_model
+    return load_model()

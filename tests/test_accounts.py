@@ -43,7 +43,7 @@ def test_ticker_normalizes_symbol_and_returns_asset(trading_client_factory, trad
     client = Mock()
     client.get_asset.return_value.tradable = tradable
     trading_client_factory.return_value = client
-    ticker = utils.Ticker(" aapl ")
+    ticker = utils.Ticker(" aapl ", utils.Account().login())
     assert ticker.get_info() is client.get_asset.return_value
     client.get_asset.assert_called_once_with("AAPL")
 
@@ -51,7 +51,7 @@ def test_ticker_normalizes_symbol_and_returns_asset(trading_client_factory, trad
 def test_ticker_failure_and_disconnection(trading_client_factory):
     client = Mock()
     trading_client_factory.return_value = client
-    ticker = utils.Ticker("AAPL")
+    ticker = utils.Ticker("AAPL", utils.Account().login())
     client.get_asset.side_effect = ValueError("unknown symbol")
     with pytest.raises(ValueError, match="unknown symbol"):
         ticker.get_info()

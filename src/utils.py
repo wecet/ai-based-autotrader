@@ -6,12 +6,6 @@ from alpaca.trading.models import Asset, TradeAccount
 from dotenv import load_dotenv
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-)
-
-
 class Account:
     def __init__(self) -> None:
         load_dotenv()
@@ -44,9 +38,9 @@ class Account:
 
 
 class Ticker:
-    def __init__(self, ticker: str) -> None:
+    def __init__(self, ticker: str, account: Account) -> None:
         self.ticker = ticker.upper().strip()
-        self.account = Account().login()
+        self.account = account
 
     def get_info(self) -> Asset:
         if self.account.trading_client is None:
@@ -63,13 +57,5 @@ class Ticker:
         else:
             logging.warning("%s exists but is not currently tradable.", self.ticker)
 
-        logging.info("Asset details: %s", asset)
+        logging.debug("Asset details: %s", asset)
         return asset
-
-
-"""
-EXAMPLE:
-if __name__ == "__main__":
-    ticker = Ticker("AAPL")
-    asset = ticker.get_info()
-"""
