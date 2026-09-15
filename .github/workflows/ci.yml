@@ -1,0 +1,36 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  test-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.8.22'
+          python-version: '3.13'
+      - run: uv sync --locked --group dev
+      - run: uv run --no-sync pytest
+      - run: uv build
+      - name: Verify installed wheel outside checkout
+        run: |
+          uv venv /tmp/package-check --python 3.13
+          uv pip install --python /tmp/package-check/bin/python dist/*.whl
+          cd /tmp
+          /tmp/package-check/bin/python "$GITHUB_WORKSPACE/scripts/check_package.py"
+          /tmp/package-check/bin/ai-autotrader --help
+      - name: Build runtime image
+        run: docker build -f build_files/trader.dockerfile -t autotrader:check .
+      - name: Verify container entry point
+        run: docker run --rm autotrader:check python src/main.py --help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/*
+          if-no-files-found: error

@@ -8,3 +8,7 @@ __pycache__/
 htmlcov/
 coverage.xml
 state/
+
+build/
+dist/
+*.egg-info/

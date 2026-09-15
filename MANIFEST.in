@@ -1,0 +1,11 @@
+include uv.lock
+include src/readme.md
+include src/__init__.py
+include AGENTS.md
+include .agents/coding-conventions.md
+recursive-include docs *.md
+recursive-include tests *.py *.md
+recursive-include scripts *.py
+include docker-compose.yml
+include build_files/trader.dockerfile
+include .dockerignore

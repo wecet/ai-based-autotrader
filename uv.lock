@@ -10,7 +10,7 @@ resolution-markers = [
 [[package]]
 name = "ai-trading-playground"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "alpaca-py" },
     { name = "dotenv" },

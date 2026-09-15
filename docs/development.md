@@ -86,8 +86,9 @@ uv run pytest tests/test_autotrader.py tests/test_runtime.py
 
 Pytest discovers `tests/` and adds `src/` to its import path through
 [pyproject.toml](../pyproject.toml). Coverage is optional and has no configured
-minimum threshold. There is no repository CI workflow; these commands run the
-automated suite locally.
+minimum threshold. The GitHub Actions CI workflow runs the offline suite, builds distributions,
+checks the installed wheel and builds the Docker image. See
+[releases and packages](releases.md) for publication.
 
 | Test module | Main coverage |
 | --- | --- |

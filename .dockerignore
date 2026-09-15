@@ -8,3 +8,4 @@ src/**/*.pyc
 src/**/.DS_Store
 !build_files/
 !build_files/trader.dockerfile
+src/*.egg-info/

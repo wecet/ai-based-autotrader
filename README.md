@@ -57,3 +57,6 @@ Start with the [documentation index](docs/README.md).
 - [Trading behavior](docs/trading.md): data, ranking, portfolio targets, and order limits.
 - [Deployment and operations](docs/operations.md): Docker lifecycle, health, state, and troubleshooting.
 - [Development and testing](docs/development.md): architecture, pytest, VS Code, and coding conventions.
+
+- [Code architecture](src/readme.md): runtime flow and component boundaries.
+- [Releases and packages](docs/releases.md): build distributions and publish tagged releases.

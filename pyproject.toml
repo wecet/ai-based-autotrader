@@ -1,7 +1,12 @@
+[build-system]
+requires = ["setuptools>=77,<85"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "ai-trading-playground"
 version = "0.1.0"
 description = "A playground for experimenting with AI-powered trading strategies."
+readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "alpaca-py",
@@ -12,8 +17,24 @@ dependencies = [
     "uvicorn>=0.30,<1"
 ]
 
-[tool.uv]
-package = false
+[project.scripts]
+ai-autotrader = "main:main"
+ai-autotrader-dashboard = "dashboard.__main__:main"
+
+[project.urls]
+Repository = "https://github.com/wecet/ai-based-autotrader"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["main"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["brokers*", "configuration*", "core*", "dashboard*", "data*", "infrastructure*", "models*", "trading*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+dashboard = ["static/*.html", "static/*.css", "static/*.js"]
 
 [dependency-groups]
 dev = ["pytest>=8.3,<10", "pytest-cov>=6,<8", "httpx>=0.28,<1"]
