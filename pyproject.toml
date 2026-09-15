@@ -34,7 +34,7 @@ include = ["brokers*", "configuration*", "core*", "dashboard*", "data*", "infras
 namespaces = false
 
 [tool.setuptools.package-data]
-dashboard = ["static/*.html", "static/*.css", "static/*.js", "static/*.svg"]
+dashboard = ["static/*.html", "static/*.css", "static/*.js", "static/*.svg", "static/*.png"]
 
 [dependency-groups]
 dev = ["pytest>=8.3,<10", "pytest-cov>=6,<8", "httpx>=0.28,<1"]

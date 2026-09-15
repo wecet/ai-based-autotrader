@@ -10,7 +10,7 @@ from dashboard import app
 package = distribution("ai-trading-playground")
 assert package.version
 static = Path(app.__file__).parent / "static"
-for filename in ("index.html", "style.css", "app.js", "favicon.svg"):
+for filename in ("index.html", "style.css", "app.js", "favicon.svg", "favicon.png"):
     assert (static / filename).is_file(), filename
 assert "cross_sectional" in ModelRegistry().discover()[0]
 entries = {entry.name: entry for entry in package.entry_points}
