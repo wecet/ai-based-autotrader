@@ -7,13 +7,14 @@ import secrets
 import time
 from zoneinfo import ZoneInfo
 
+from core.registry import UnknownModel
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from live_settings import LiveSettingsStore, SettingsConflict, TradingSettings, atomic_text, json_object, serialize_settings
+from configuration.settings import LiveSettingsStore, SettingsConflict, TradingSettings, atomic_text, json_object, serialize_settings
 
 
 class SaveRequest(BaseModel):
@@ -57,6 +58,7 @@ def status_payload(state_dir, revision):
         "heartbeat_at": stamp if isinstance(stamp, (float, int)) else None,
         "applied_revision": applied.get("revision"),
         "applied_at": applied.get("time"),
+        "applied_model_id": applied.get("model_id"),
         "settings_state": "applied" if applied.get("revision") == revision and health == "healthy" else "pending",
         "attempts_today": count,
         "trading_day": today,
@@ -102,7 +104,11 @@ def create_app(store: LiveSettingsStore, state_dir: Path, key: str, *, allowed_h
     def get_settings():
         current = read_settings()
         return {"settings": current.settings.model_dump(), "revision": current.revision,
-                "status": status_payload(state_dir, current.revision)}
+                "status": status_payload(state_dir, current.revision), **store.registry.catalog()}
+
+    @app.get("/api/models")
+    def get_models():
+        return store.registry.catalog()
 
     @app.get("/api/status")
     def get_status():
@@ -133,6 +139,8 @@ def create_app(store: LiveSettingsStore, state_dir: Path, key: str, *, allowed_h
             raise HTTPException(422, "Use valid JSON without duplicate keys.")
         try:
             saved = store.save(change.settings, change.revision)
+        except UnknownModel as error:
+            raise HTTPException(422, str(error))
         except SettingsConflict as error:
             raise HTTPException(409, str(error))
         except (ValueError, OSError):

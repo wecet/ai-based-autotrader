@@ -2,7 +2,7 @@
 import socket
 
 import pytest
-import utils
+import brokers.account as utils
 
 
 @pytest.fixture(autouse=True)
@@ -31,5 +31,5 @@ def offline(monkeypatch):
 
 @pytest.fixture(scope="session")
 def cs():
-    from model_loader import load_model
-    return load_model()
+    from models import cross_sectional
+    return cross_sectional

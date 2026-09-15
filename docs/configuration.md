@@ -82,6 +82,7 @@ settings file is saved. Exposure values here are fractions; the page shows perce
 
 | Variable | Default |
 | --- | --- |
+| TRADER_MODEL | cross_sectional |
 | TRADER_ENABLED | true |
 | TRADER_MAX_DAILY_TRADES | 10 |
 | TRADER_MIN_ORDER_NOTIONAL | 10 |
@@ -108,3 +109,7 @@ docker compose up -d --force-recreate trader
 
 A plain container restart does not load new environment values. Rebuild as well
 when source code or dependencies change. See [operations](operations.md).
+
+Strategy selection uses the model filename without .py. The dashboard shows
+the name and explanation exported by that file; see [models](models.md). Saved
+settings created before this key existed retain cross_sectional as the default.

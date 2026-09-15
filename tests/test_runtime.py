@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 import main
-from runtime import CycleTimeout, deadline, healthy, run_forever, write_json
+from infrastructure.service import CycleTimeout, deadline, healthy, run_forever, write_json
 
 
 def test_loop_repeats_recovers_and_stops(tmp_path):
@@ -66,7 +66,7 @@ def test_real_main_repeats_and_handles_sigterm(tmp_path):
     # Exercise actual entry-point/lifecycle in a separate process, with no broker.
     script = '''
 import main
-from trader import Autotrader
+from trading.runner import Autotrader
 from pathlib import Path
 import os
 class Fake:
@@ -103,7 +103,7 @@ raise SystemExit(main.main([]))
 
 
 def test_serve_initialization_retries_and_signal_stop(tmp_path, monkeypatch):
-    import runtime
+    import infrastructure.service as runtime
     monkeypatch.setenv("TRADER_POLL_SECONDS", ".001")
     old_handler = signal.getsignal(signal.SIGTERM)
     service = Mock()
@@ -117,7 +117,7 @@ def test_serve_initialization_retries_and_signal_stop(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("value", ["0", "-1", "nan", "inf"])
 def test_invalid_runtime_settings(tmp_path, monkeypatch, value):
-    import runtime
+    import infrastructure.service as runtime
     monkeypatch.setenv("TRADER_POLL_SECONDS", value)
     with pytest.raises(ValueError):
         runtime.serve(Mock(), tmp_path)

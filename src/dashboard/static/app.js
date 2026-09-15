@@ -5,6 +5,7 @@ const exposureFields = ["maximum_total_exposure", "maximum_sector_exposure", "ma
 const integerFields = ["max_daily_trades", "top_n"];
 let key = "", saved = null, revision = "", rows = [], dirty = false, busy = false, conflict = false;
 let polling = false;
+let models = [], unavailableModels = [], draftModelId = "";
 
 function message(text, error = false) {
   $("notice").textContent = text;
@@ -16,7 +17,7 @@ function markDirty() {
   updateButtons();
 }
 function updateButtons() {
-  $("save").disabled = !dirty || busy || conflict;
+  $("save").disabled = !dirty || busy || conflict || !models.some(model => model.id === draftModelId);
   $("discard").disabled = (!dirty && !conflict) || busy;
   $("save-label").textContent = busy ? "Saving your settings…" : conflict ? "A newer version is available" : dirty ? "● Unsaved changes" : "● All changes saved";
 }
@@ -48,7 +49,8 @@ function validateRows(entries) {
   return result;
 }
 function formSettings() {
-  const data = {...saved, universe: validateRows(rows), trading_enabled: $("trading_enabled").checked, feed: $("feed").value};
+  if (!models.some(model => model.id === draftModelId)) throw new Error("Select an available strategy before saving.");
+  const data = {...saved, model_id: draftModelId, universe: validateRows(rows), trading_enabled: $("trading_enabled").checked, feed: $("feed").value};
   for (const field of [...integerFields, ...amountFields]) data[field] = $(field).value === "" ? null : Number($(field).value);
   for (const field of exposureFields) data[field] = Number($(field).value) / 100;
   if (data.maximum_order_notional !== null && data.maximum_order_notional < data.minimum_order_notional) throw new Error("Maximum order must be at least the minimum order.");
@@ -81,7 +83,35 @@ function renderTable(focusLast = false) {
   $("no-results").hidden = visible !== 0;
   if (focusLast) body.lastElementChild?.querySelector("input")?.focus();
 }
+function renderModels() {
+  const container = $("model-options"); container.replaceChildren();
+  for (const model of models) {
+    const label = document.createElement("label"); label.className = "model-option";
+    const check = document.createElement("input"); check.type = "checkbox";
+    check.checked = model.id === draftModelId; check.name = "active-model"; check.value = model.id;
+    const content = document.createElement("span"); const heading = document.createElement("strong");
+    heading.textContent = model.name;
+    const description = document.createElement("span"); description.className = "model-description";
+    description.textContent = model.description;
+    const source = document.createElement("small"); source.textContent = model.file;
+    content.append(heading, description, source); label.append(check, content); container.append(label);
+    check.addEventListener("change", () => {
+      // Exactly one active strategy: use the pause control to disable orders.
+      draftModelId = model.id;
+      for (const option of container.querySelectorAll("input")) option.checked = option.value === draftModelId;
+      markDirty();
+    });
+  }
+  const issues = unavailableModels.map(item => item.file + ": " + item.reason);
+  if (!models.some(model => model.id === draftModelId)) issues.unshift("The saved model is unavailable. Select an available strategy.");
+  $("model-errors").textContent = issues.join("\n"); $("model-errors").hidden = issues.length === 0;
+}
 function renderStatus(status) {
+  const applied = models.find(model => model.id === status.applied_model_id);
+  const selected = models.find(model => model.id === saved.model_id);
+  $("model-current").textContent = status.settings_state === "applied"
+    ? "Applied strategy: " + (applied?.name || selected?.name || saved.model_id)
+    : "Saved strategy: " + (selected?.name || saved.model_id) + " · waiting for trader";
   $("health-label").textContent = status.health === "healthy" ? "●  Trader heartbeat healthy" : "○  Trader not reporting healthy";
   const enabled = saved.trading_enabled && saved.max_daily_trades > 0;
   $("mode-metric").textContent = enabled ? "Enabled" : "Paused";
@@ -94,7 +124,10 @@ function renderStatus(status) {
   $("sync-caption").textContent = status.settings_state === "applied" ? "Trader picked up this version" : "Applies before the next cycle";
 }
 function fillForm(data) {
-  saved = data.settings; revision = data.revision;
+  saved = data.settings; revision = data.revision; draftModelId = saved.model_id;
+  if (Array.isArray(data.models)) models = data.models;
+  if (Array.isArray(data.unavailable)) unavailableModels = data.unavailable;
+  renderModels();
   $("trading_enabled").checked = saved.trading_enabled; $("feed").value = saved.feed;
   for (const field of [...integerFields, ...amountFields]) $(field).value = saved[field] ?? "";
   for (const field of exposureFields) $(field).value = Number((saved[field] * 100).toFixed(6));

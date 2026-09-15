@@ -7,23 +7,20 @@ The module deliberately separates research from execution:
 * :class:`RidgeRanker` is a small NumPy baseline that can later be replaced by any
   LightGBM/XGBoost-style estimator exposing ``fit`` and ``predict``.
 * :class:`CrossSectionalModel` ranks the latest universe and emits trade decisions.
-* :class:`CrossSectionalTrader` sends those decisions to an Alpaca paper account.
 
 No order is submitted by importing this module.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import datetime
 from typing import Mapping, Protocol, Sequence
 
 import numpy as np
-from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.trading.requests import MarketOrderRequest
 
-import modules.templates as tmp
-from utils import Account
+import core.contracts as tmp
+from core.types import DailyBar, FeatureRow, TradeCandidate, MarketHistory, PortfolioLimits
+from core.registry import ModelDefinition
 
 
 FEATURE_NAMES = (
@@ -44,50 +41,6 @@ FEATURE_NAMES = (
     "spy_trend_20d",
     "spy_volatility_20d",
 )
-
-
-@dataclass(frozen=True)
-class DailyBar:
-    """A completed, split-adjusted daily OHLCV bar."""
-
-    date: datetime.date
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: float
-
-
-@dataclass(frozen=True)
-class FeatureRow:
-    date: datetime.date
-    symbol: str
-    sector: str
-    close: float
-    average_dollar_volume: float
-    values: tuple[float, ...]
-    future_return_5d: float | None = None
-    target_rank: float | None = None
-
-
-@dataclass(frozen=True)
-class TradeCandidate:
-    """One symbol's desired state after ranking and risk constraints."""
-
-    symbol: str
-    predicted_return: float
-    percentile_rank: float
-    price: float
-    sector: str
-    desired_weight: float
-    current_weight: float = 0.0
-    portfolio_value: float = 0.0
-    estimated_spread: float = 0.0
-    estimated_slippage: float = 0.0
-
-    @property
-    def order_notional(self) -> float:
-        return abs(self.desired_weight - self.current_weight) * self.portfolio_value
 
 
 class Estimator(Protocol):
@@ -302,6 +255,25 @@ class CrossSectionalModel(tmp.Model):
         self.safety_margin = safety_margin
         self.minimum_order_notional = minimum_order_notional
         self.return_calibration: tuple[float, float] | None = None
+        self.ranked: list[tuple[FeatureRow, float, float]] = []
+
+    def prepare(self, history: MarketHistory, universe: Mapping[str, str]) -> None:
+        training = build_ranked_training_set(history.stocks, history.spy, history.sectors, universe)
+        rows = build_feature_rows(history.stocks, history.spy, history.sectors, universe)
+        if len(rows) < 2 or not training:
+            raise ValueError("Insufficient liquid stocks or training rows")
+        self.fit(training)
+        self.ranked = self.rank(rows)
+
+    def candidates(self, current_weights: Mapping[str, float], portfolio_value: float,
+                   limits: PortfolioLimits) -> list[TradeCandidate]:
+        eligible = {row.symbol for row, _, _ in self.ranked}
+        retained = sum(weight for symbol, weight in current_weights.items() if symbol not in eligible)
+        return self.construct_portfolio(
+            self.ranked, current_weights=current_weights, portfolio_value=portfolio_value,
+            maximum_total_exposure=max(0, limits.maximum_total_exposure - retained),
+            maximum_sector_exposure=limits.maximum_sector_exposure,
+            maximum_position=limits.maximum_position, top_n=limits.top_n)
 
     def fit(self, rows: Sequence[FeatureRow]) -> "CrossSectionalModel":
         usable = [
@@ -414,48 +386,10 @@ class CrossSectionalModel(tmp.Model):
         return candidates
 
 
-class CrossSectionalTrader(tmp.Trader):
-    """Execute model-approved notional orders through an Alpaca paper account."""
-
-    def __init__(self, model: CrossSectionalModel, account: Account) -> None:
-        super().__init__(model)
-        if account.trading_client is None:
-            raise RuntimeError("Account.login() must be called before creating the trader")
-        self.account = account
-
-    def _submit(self, context: TradeCandidate, side: OrderSide) -> None:
-        client = self.account.trading_client
-        if client is None:
-            raise RuntimeError("the Alpaca trading client is not connected")
-        request = MarketOrderRequest(
-            symbol=context.symbol,
-            notional=round(context.order_notional, 2),
-            side=side,
-            time_in_force=TimeInForce.DAY,
-        )
-        client.submit_order(order_data=request)
-
-    def buy(self, context: TradeCandidate) -> None:
-        self._submit(context, OrderSide.BUY)
-
-    def sell(self, context: TradeCandidate) -> None:
-        self._submit(context, OrderSide.SELL)
-
-    def rebalance(self, candidates: Sequence[TradeCandidate]) -> dict[str, tmp.TradeAction]:
-        """Sell reductions first, then submit approved buys."""
-
-        client = self.account.trading_client
-        if client is None:
-            raise RuntimeError("the Alpaca trading client is not connected")
-        if not client.get_clock().is_open:
-            raise RuntimeError("the market is closed; no rebalance orders were submitted")
-        account_details = client.get_account()
-        if account_details.trading_blocked:
-            raise RuntimeError("Alpaca has blocked trading on this account")
-
-        actions: dict[str, tmp.TradeAction] = {}
-        sells = [candidate for candidate in candidates if candidate.desired_weight < candidate.current_weight]
-        buys = [candidate for candidate in candidates if candidate.desired_weight >= candidate.current_weight]
-        for candidate in (*sells, *buys):
-            actions[candidate.symbol] = self.trade(candidate)
-        return actions
+MODEL = ModelDefinition(
+    name="Cross-sectional ranking",
+    description=("Ranks stocks and ETFs against one another using completed daily bars. "
+                 "A ridge model estimates five-session return ranks, then selects positions "
+                 "whose estimated edge exceeds trading costs, within your exposure limits."),
+    model_type=CrossSectionalModel,
+)

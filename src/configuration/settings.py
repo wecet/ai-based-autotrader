@@ -11,6 +11,7 @@ import re
 import tempfile
 from typing import Literal
 
+from core.registry import DEFAULT_MODEL_ID, ModelRegistry
 from dotenv import dotenv_values
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -20,6 +21,7 @@ class TradingSettings(BaseModel):
 
     universe: dict[str, str] = Field(min_length=2, max_length=500)
     feed: Literal["iex", "sip"] = "iex"
+    model_id: str = Field(default=DEFAULT_MODEL_ID, pattern=r"^[a-z][a-z0-9_]{0,79}$")
     trading_enabled: bool = True
     max_daily_trades: int = Field(default=10, ge=0, le=1000)
     minimum_order_notional: float = Field(default=10.0, ge=1, le=1_000_000)
@@ -92,6 +94,7 @@ def boolean(value):
 ENV_FIELDS = {
     "universe": ("TRADER_UNIVERSE", json_object),
     "feed": ("TRADER_DATA_FEED", str),
+    "model_id": ("TRADER_MODEL", str),
     "trading_enabled": ("TRADER_ENABLED", boolean),
     "max_daily_trades": ("TRADER_MAX_DAILY_TRADES", int),
     "minimum_order_notional": ("TRADER_MIN_ORDER_NOTIONAL", float),
@@ -144,7 +147,8 @@ class SettingsConflict(Exception):
 
 
 class LiveSettingsStore:
-    def __init__(self, directory, defaults=TradingSettings.from_environment):
+    def __init__(self, directory, defaults=TradingSettings.from_environment, *, registry=None):
+        self.registry = registry if registry is not None else ModelRegistry()
         self.directory = Path(directory)
         self.path = self.directory / "runtime.env"
         self.defaults = defaults
@@ -161,6 +165,10 @@ class LiveSettingsStore:
             return snapshot(self.defaults())
         values = dotenv_values(stream=StringIO(self.path.read_text()), interpolate=False)
         expected = {name for name, _ in ENV_FIELDS.values()}
+        # Upgrade files saved before strategy selection existed. Only this one
+        # known missing key is allowed; every other incomplete file still fails.
+        if set(values) == expected - {"TRADER_MODEL"}:
+            values["TRADER_MODEL"] = DEFAULT_MODEL_ID
         if set(values) != expected:
             raise ValueError("Runtime settings file has missing or unknown keys")
         return snapshot(TradingSettings.from_env_values(values))
@@ -168,6 +176,7 @@ class LiveSettingsStore:
     def save(self, settings, expected_revision):
         # Validate again at the storage boundary, including callers outside HTTP.
         settings = TradingSettings.model_validate(settings.model_dump())
+        self.registry.require(settings.model_id)
         with self.lock():
             if self.read().revision != expected_revision:
                 raise SettingsConflict("Settings changed in another session. Reload before saving.")

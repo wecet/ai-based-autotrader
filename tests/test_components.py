@@ -3,10 +3,10 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-from config import TraderSettings
-from order_journal import OrderJournal
-from trader import Autotrader
-from utils import Ticker
+from configuration.legacy import TraderSettings
+from infrastructure.journal import OrderJournal
+from trading.runner import Autotrader
+from brokers.account import Ticker
 
 
 def test_ticker_reuses_account_without_login():
@@ -41,7 +41,7 @@ def test_journal_rejects_eleventh_attempt(tmp_path):
 
 def test_coordinator_accepts_independent_components(tmp_path):
     from datetime import datetime
-    from market_data import NY
+    from data.historical import NY
     client = Mock()
     client.get_clock.return_value = SimpleNamespace(
         is_open=True, timestamp=datetime(2026, 9, 14, 10, tzinfo=NY))

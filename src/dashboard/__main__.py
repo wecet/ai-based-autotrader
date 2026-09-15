@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import uvicorn
 
 from dashboard.app import access_key, create_app
-from live_settings import LiveSettingsStore
+from configuration.settings import LiveSettingsStore
 
 
 def main():

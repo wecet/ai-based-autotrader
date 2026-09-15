@@ -1,3 +1,4 @@
+from core.types import FeatureRow, TradeCandidate
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime
@@ -7,10 +8,10 @@ from unittest.mock import Mock
 import pytest
 from pydantic import ValidationError
 
-from live_settings import LiveSettingsStore, SettingsConflict, TradingSettings, serialize_settings
-from market_data import NY
-from runtime import write_json
-from trader import Autotrader
+from configuration.settings import LiveSettingsStore, SettingsConflict, TradingSettings, serialize_settings
+from data.historical import NY
+from infrastructure.storage import write_json
+from trading.runner import Autotrader
 
 
 @pytest.fixture
@@ -97,8 +98,8 @@ def make_runner(tmp_path, store, defaults):
     runner = Autotrader(SimpleNamespace(trading_client=client), Mock(), defaults.universe,
                        tmp_path, settings=defaults, settings_store=store)
     runner.signals.refresh = Mock()
-    row = runner.signals.cs.FeatureRow(datetime(2026, 9, 11).date(), "AAA", "XLK", 100, 10000000, (0,) * 16)
-    runner.signals.ranked = [(row, .02, 1)]
+    row = FeatureRow(datetime(2026, 9, 11).date(), "AAA", "XLK", 100, 10000000, (0,) * 16)
+    runner.signals.model.ranked = [(row, .02, 1)]
     return runner
 
 
@@ -134,7 +135,7 @@ def test_universe_and_feed_changes_invalidate_daily_signals(tmp_path, store, def
     store.save(updated, store.read().revision)
     runner.reload_settings()
     assert runner.signals.signal_date is None
-    assert runner.signals.ranked == []
+    assert runner.signals.model.ranked == []
     assert runner.signals.universe == updated.universe
     assert runner.signals.history.feed.value == "sip"
     assert (tmp_path / "applied-settings.json").exists()

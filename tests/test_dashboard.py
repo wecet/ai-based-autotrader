@@ -1,3 +1,4 @@
+from core.types import FeatureRow, TradeCandidate
 from datetime import datetime
 import json
 import time
@@ -7,8 +8,8 @@ from fastapi.testclient import TestClient
 import pytest
 
 from dashboard.app import access_key, create_app
-from live_settings import LiveSettingsStore, TradingSettings
-from runtime import write_json
+from configuration.settings import LiveSettingsStore, TradingSettings
+from infrastructure.storage import write_json
 
 
 @pytest.fixture
@@ -123,8 +124,8 @@ def test_duplicate_json_keys_rejected_before_last_value_wins(panel):
 def test_api_save_reaches_real_trader_components(panel, tmp_path):
     from types import SimpleNamespace
     from unittest.mock import Mock
-    from trader import Autotrader
-    from market_data import NY
+    from trading.runner import Autotrader
+    from data.historical import NY
 
     http, store, key = panel
     defaults = store.read().settings
@@ -137,8 +138,8 @@ def test_api_save_reaches_real_trader_components(panel, tmp_path):
     runner = Autotrader(SimpleNamespace(trading_client=broker), Mock(), defaults.universe,
                        tmp_path, settings=defaults, settings_store=store)
     runner.signals.refresh = Mock()
-    row = runner.signals.cs.FeatureRow(datetime(2026, 9, 11).date(), 'AAA', 'XLK', 100, 10000000, (0,) * 16)
-    runner.signals.ranked = [(row, .02, 1)]
+    row = FeatureRow(datetime(2026, 9, 11).date(), 'AAA', 'XLK', 100, 10000000, (0,) * 16)
+    runner.signals.model.ranked = [(row, .02, 1)]
     current = http.get('/api/settings', headers=headers(key)).json()
     settings = {**current['settings'], 'max_daily_trades': 1, 'maximum_order_notional': 20.5}
     response = http.put('/api/settings', headers=headers(key), json={'revision': current['revision'], 'settings': settings})

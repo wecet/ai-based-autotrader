@@ -8,7 +8,7 @@ import sys
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from runtime import CycleTimeout, healthy, serve
+from infrastructure.service import CycleTimeout, healthy, serve
 
 
 def main(argv=None):
@@ -27,7 +27,7 @@ def main(argv=None):
     from dotenv import load_dotenv
     load_dotenv()
     state_dir = Path(os.getenv("TRADER_STATE_DIR", "state"))
-    from trader import Autotrader
+    from trading.runner import Autotrader
     try:
         state_dir.mkdir(parents=True, exist_ok=True)
         # One process per state volume; prevents concurrent rebalances.

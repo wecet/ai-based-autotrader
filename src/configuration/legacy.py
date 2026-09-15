@@ -1,6 +1,6 @@
 import pydantic
 import enum
-import utils
+import brokers.account as utils
 
 
 class MODELS_(enum.Enum):
@@ -23,4 +23,4 @@ class Config(pydantic.BaseModel):
 
 
 # Backwards-compatible import for the shared validated settings model.
-from live_settings import TradingSettings as TraderSettings
+from configuration.settings import TradingSettings as TraderSettings

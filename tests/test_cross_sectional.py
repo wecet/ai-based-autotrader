@@ -1,3 +1,4 @@
+from brokers.paper_trader import PaperTrader
 from dataclasses import replace
 from datetime import date, timedelta
 from types import SimpleNamespace
@@ -180,7 +181,7 @@ def test_rebalance_sells_first_and_builds_orders(cs, candidate):
     client = Mock()
     client.get_clock.return_value.is_open = True
     client.get_account.return_value.trading_blocked = False
-    trader = cs.CrossSectionalTrader(cs.CrossSectionalModel(), SimpleNamespace(trading_client=client))
+    trader = PaperTrader(cs.CrossSectionalModel(), SimpleNamespace(trading_client=client))
     sell = replace(candidate, symbol="SELL", current_weight=.2, desired_weight=0)
     hold = replace(candidate, symbol="HOLD", desired_weight=0)
     assert trader.rebalance([candidate, hold, sell]) == {"SELL": "sell", "AAA": "buy", "HOLD": "hold"}
@@ -195,7 +196,7 @@ def test_rebalance_guards(cs, candidate, is_open, blocked):
     client = Mock()
     client.get_clock.return_value.is_open = is_open
     client.get_account.return_value.trading_blocked = blocked
-    trader = cs.CrossSectionalTrader(cs.CrossSectionalModel(), SimpleNamespace(trading_client=client))
+    trader = PaperTrader(cs.CrossSectionalModel(), SimpleNamespace(trading_client=client))
     with pytest.raises(RuntimeError):
         trader.rebalance([candidate])
     client.submit_order.assert_not_called()
@@ -204,9 +205,9 @@ def test_rebalance_guards(cs, candidate, is_open, blocked):
 def test_trader_requires_connection(cs, candidate):
     account = SimpleNamespace(trading_client=None)
     with pytest.raises(RuntimeError):
-        cs.CrossSectionalTrader(cs.CrossSectionalModel(), account)
+        PaperTrader(cs.CrossSectionalModel(), account)
     account.trading_client = Mock()
-    trader = cs.CrossSectionalTrader(cs.CrossSectionalModel(), account)
+    trader = PaperTrader(cs.CrossSectionalModel(), account)
     account.trading_client = None
     with pytest.raises(RuntimeError):
         trader.rebalance([candidate])

@@ -1,7 +1,7 @@
 """Persist daily order attempts before sending broker requests."""
 import hashlib
 import json
-from runtime import write_json
+from infrastructure.storage import write_json
 
 
 class OrderJournal:

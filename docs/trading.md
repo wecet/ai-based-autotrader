@@ -1,10 +1,15 @@
 # Trading behavior
 
+Execution guards are shared by all models. The feature, training, and
+allocation algorithm described below is the default cross-sectional strategy;
+other installed models implement their own preparation and candidate generation.
+See [drop-in strategies](models.md) for their interface and switching behavior.
+
 ## One cycle
 
 The runner performs these checks sequentially:
 
-Before these checks, the runner reloads saved dashboard settings and returns
+Before these checks, the runner reloads saved dashboard settings, including the selected model, and returns
 without broker calls if trading is paused.
 
 1. Read Alpaca's clock; wait if the market is closed.

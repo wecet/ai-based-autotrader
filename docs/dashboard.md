@@ -50,6 +50,7 @@ public multi-user website.
 
 | Control | Default | Validation / behavior |
 | --- | --- | --- |
+| Active strategy | Cross-sectional ranking | Exactly one discovered model, named and described by its source file |
 | Allow new orders | On | Pause keeps the loop alive; it does not cancel existing orders |
 | Daily order limit | 10 | Integer 0–1000; 0 prevents new attempts |
 | Minimum order amount | $10 | $1–$1,000,000, at most two decimal places |
@@ -81,7 +82,7 @@ Docker does not dynamically update running process environments when `.env`
 changes; the trader explicitly reads this runtime settings file instead.
 
 Before each cycle, the trader reads one complete validated settings snapshot.
-Changed universe or feed settings invalidate its cached daily ranking and cause
+Changed model, universe, or feed settings invalidate its cached daily ranking and cause
 a refresh on the next eligible trading cycle. Other limits update without
 retraining. The default cycle wait is 60 seconds, plus time spent in the preceding
 cycle. A save does not interrupt an order or cycle already underway.
@@ -124,6 +125,7 @@ The API is protected by `Authorization: Bearer <dashboard-key>`:
 | --- | --- |
 | `GET /api/settings` | Current allowlisted values, revision, and runner status |
 | `PUT /api/settings` | Save `{ "revision": "…", "settings": { … } }` |
+| `GET /api/models` | Available model names, descriptions, IDs and load errors |
 | `GET /api/status` | Acknowledgement, heartbeat state, and today's attempt count |
 | `GET /api/export` | Download the allowlisted runtime `.env` |
 | `GET /healthz` | Dashboard health check, without authentication |
@@ -144,8 +146,12 @@ Use the same `TRADER_STATE_DIR` and `TRADER_CONTROL_DIR` for both processes.
 Locally the default control directory is `state/control`; retrieve its
 `dashboard.key` file locally instead of using the container command.
 
-The implementation is split between `live_settings.py` (schema and persistence),
+The implementation is split between `configuration/settings.py` (schema and persistence),
 `dashboard/app.py` (API), and `dashboard/static/` (UI). The trader reloads settings
 and passes them to `DailySignals` and `OrderExecutor`. API and execution tests
 cover saves, conflicts, authentication, pause/resume, order caps, cache invalidation,
 and daily-budget preservation without contacting the broker.
+
+See [drop-in strategies](models.md) for the source-file contract. New model
+files require rebuilding both containers; the checkbox switches existing models
+at runtime. The default strategy remains cross-sectional ranking.

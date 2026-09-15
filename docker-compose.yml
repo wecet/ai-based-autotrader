@@ -46,6 +46,7 @@ services:
       # Explicit allowlist: broker credentials are not passed to the dashboard.
       TRADER_UNIVERSE: '${TRADER_UNIVERSE:-}'
       TRADER_DATA_FEED: '${TRADER_DATA_FEED:-iex}'
+      TRADER_MODEL: '${TRADER_MODEL:-cross_sectional}'
       TRADER_ENABLED: '${TRADER_ENABLED:-true}'
       TRADER_MAX_DAILY_TRADES: '${TRADER_MAX_DAILY_TRADES:-10}'
       TRADER_MIN_ORDER_NOTIONAL: '${TRADER_MIN_ORDER_NOTIONAL:-10}'

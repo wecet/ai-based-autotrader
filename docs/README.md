@@ -6,6 +6,7 @@ model defaults are distinguished from broker account settings and live results.
 | Guide | Contents |
 | --- | --- |
 | [Live settings dashboard](dashboard.md) | Realtime controls, access key, and settings persistence |
+| [Drop-in strategies](models.md) | Model interface, discovery, metadata, and runtime selection |
 | [Configuration](configuration.md) | Required credentials, environment defaults, and JSON universe format |
 | [Universe](universe.md) | The 50-ETF / 100-stock selection and benchmark mapping |
 | [Trading behavior](trading.md) | Feature generation, training, allocation, and execution |

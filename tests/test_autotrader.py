@@ -1,11 +1,12 @@
+from core.types import FeatureRow, TradeCandidate
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 from alpaca.trading.enums import OrderSide
-from trader import Autotrader, NY
-from runtime import write_json
+from trading.runner import Autotrader, NY
+from infrastructure.storage import write_json
 
 
 @pytest.fixture
@@ -18,8 +19,8 @@ def service(tmp_path):
     client.get_asset.return_value = SimpleNamespace(tradable=True, fractionable=True)
     runner = Autotrader(SimpleNamespace(trading_client=client), Mock(), {"AAA": "XLK", "BBB": "XLF"}, tmp_path)
     runner.signals.refresh = Mock()
-    row = runner.signals.cs.FeatureRow(datetime(2026, 9, 11).date(), "AAA", "XLK", 100, 10_000_000, (0,) * 16)
-    runner.signals.ranked = [(row, .02, 1)]
+    row = FeatureRow(datetime(2026, 9, 11).date(), "AAA", "XLK", 100, 10_000_000, (0,) * 16)
+    runner.signals.model.ranked = [(row, .02, 1)]
     return runner
 
 
@@ -32,7 +33,7 @@ def test_repeated_cycles_and_restart_do_not_duplicate(service):
     assert request.notional == 1000
     restarted = Autotrader(service.account, service.signals.history.data_client, service.signals.universe, service.journal.state_path.parent)
     restarted.signals.refresh = Mock()
-    restarted.signals.ranked = service.signals.ranked
+    restarted.signals.model.ranked = service.signals.model.ranked
     restarted.run_once()
     assert service.client.submit_order.call_count == 1
 
@@ -103,7 +104,7 @@ def test_daily_data_pipeline(tmp_path):
             for i in range(211)]
     runner.signals.history.data_client.get_stock_bars.return_value = SimpleNamespace(data=data)
     runner.signals.refresh(today)
-    assert len(runner.signals.ranked) == 2
+    assert len(runner.signals.model.ranked) == 2
     assert runner.signals.model.return_calibration is not None
     request = runner.signals.history.data_client.get_stock_bars.call_args.args[0]
     assert request.end.replace(tzinfo=timezone.utc) < today
@@ -119,7 +120,7 @@ def test_missing_universe_never_logs_in(monkeypatch, tmp_path):
 
 def test_never_submits_eleventh_order(service):
     service.signals.model.construct_portfolio = Mock(return_value=[
-        service.signals.cs.TradeCandidate(str(i), .02, 1, 100, "tech", .1, portfolio_value=10000)
+        TradeCandidate(str(i), .02, 1, 100, "tech", .1, portfolio_value=10000)
         for i in range(15)])
     for _ in range(20):
         service.run_once()
@@ -128,7 +129,7 @@ def test_never_submits_eleventh_order(service):
 
 
 def test_environment_factory_uses_paper_account(monkeypatch, tmp_path):
-    import trader
+    import trading.runner as trader
     monkeypatch.setenv("TRADER_UNIVERSE", '{"aaa":"xlk","bbb":"xlf"}')
     account = Mock()
     account.login.return_value = account

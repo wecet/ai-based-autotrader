@@ -9,14 +9,14 @@ from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.trading.enums import QueryOrderStatus
 from alpaca.trading.requests import GetOrdersRequest
 
-from config import TraderSettings
-from live_settings import LiveSettingsStore
-from runtime import write_json
-from execution import OrderExecutor
-from market_data import HistoricalData, NY
-from order_journal import OrderJournal
-from signals import DailySignals
-from utils import Account
+from configuration.settings import LiveSettingsStore
+from core.registry import DEFAULT_MODEL_ID
+from infrastructure.storage import write_json
+from trading.execution import OrderExecutor
+from data.historical import HistoricalData, NY
+from infrastructure.journal import OrderJournal
+from trading.signals import DailySignals
+from brokers.account import Account
 
 
 class Autotrader:
@@ -32,7 +32,8 @@ class Autotrader:
         self.account = account
         self.client = account.trading_client
         self.signals = signals if signals is not None else DailySignals(
-            HistoricalData(data_client, feed=feed), sectors)
+            HistoricalData(data_client, feed=feed), sectors,
+            model_id=settings.model_id if settings is not None else DEFAULT_MODEL_ID)
         self.journal = journal if journal is not None else OrderJournal(state_dir / "orders.json")
         self.executor = executor if executor is not None else OrderExecutor(account, self.journal)
         if settings is not None:
@@ -42,6 +43,7 @@ class Autotrader:
     def from_environment(cls, state_dir):
         store = LiveSettingsStore(Path(os.getenv("TRADER_CONTROL_DIR", str(state_dir / "control"))))
         settings = store.read().settings
+        store.registry.require(settings.model_id)
         account = Account().login()
         return cls(account, StockHistoricalDataClient(account.api_key, account.secret_key),
                    settings.universe, state_dir, feed=DataFeed(settings.feed),
@@ -62,7 +64,7 @@ class Autotrader:
             self.state_dir.mkdir(parents=True, exist_ok=True)
             write_json(self.state_dir / "applied-settings.json", {
                 "revision": current.revision, "time": time.time(),
-                "trading_enabled": self.trading_enabled,
+                "trading_enabled": self.trading_enabled, "model_id": current.settings.model_id,
             })
             self.settings_revision = current.revision
             logging.info("Applied trading settings %s", current.revision)

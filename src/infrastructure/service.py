@@ -7,6 +7,7 @@ from pathlib import Path
 import signal
 import threading
 import time
+from infrastructure.storage import write_json
 
 
 class CycleTimeout(BaseException):
@@ -25,12 +26,6 @@ def deadline(seconds):
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous)
-
-
-def write_json(path, value):
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(value))
-    temporary.replace(path)
 
 
 def healthy(path, max_age=180, now=None):

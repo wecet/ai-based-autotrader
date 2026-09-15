@@ -18,26 +18,28 @@ Configuration is supplied through environment variables.
 
 ## Source layout
 
-| File | Responsibility |
+| Package / file | Responsibility |
 | --- | --- |
-| [main.py](../src/main.py) | Entry point, process lock, startup and exit status |
-| [runtime.py](../src/runtime.py) | Loop, deadlines, signals, heartbeat and failure policy |
-| [live_settings.py](../src/live_settings.py) | Validated controls, runtime dotenv storage, atomic saves and revision checks |
-| [dashboard/app.py](../src/dashboard/app.py) | Authenticated HTTP controls and read-only runner status |
-| [trader.py](../src/trader.py) | Broker checks and coordination of one trading cycle |
-| [market_data.py](../src/market_data.py) | Alpaca history retrieval, conversion, and session alignment |
-| [signals.py](../src/signals.py) | Daily training, cached ranking, and target construction |
-| [order_journal.py](../src/order_journal.py) | Persistent attempt reservations, daily cap, and order IDs |
-| [execution.py](../src/execution.py) | Asset eligibility, cost decisions, and order submission |
-| [model_loader.py](../src/model_loader.py) | Shared loader for the legacy model filename |
-| [cross-sectional.py](../src/models/cross-sectional.py) | Features, labels, ridge estimator, ranking and allocation |
-| [utils.py](../src/utils.py) | Shared `Account` connection and `Ticker` asset lookup |
-| [templates.py](../src/modules/templates.py) | Abstract model/trader interfaces and decision dispatch |
-| [config.py](../src/config.py) | Typed model/account configuration and `TraderSettings` environment parsing |
+| [main.py](../src/main.py) | Stable entry point and process lock |
+| [core/contracts.py](../src/core/contracts.py) | Abstract Model/Trader interfaces and decision dispatch |
+| [core/types.py](../src/core/types.py) | Shared bars, histories, candidates and portfolio limits |
+| [core/registry.py](../src/core/registry.py) | Discover MODEL exports and expose strategy metadata |
+| [models/cross_sectional.py](../src/models/cross_sectional.py) | Existing cross-sectional research strategy |
+| [configuration/settings.py](../src/configuration/settings.py) | Validated live controls, dotenv persistence and revision checks |
+| [trading/runner.py](../src/trading/runner.py) | Broker checks and cycle coordination |
+| [trading/signals.py](../src/trading/signals.py) | Selected model lifecycle and daily preparation |
+| [trading/execution.py](../src/trading/execution.py) | Trader implementation with shared execution guards |
+| [data/historical.py](../src/data/historical.py) | Historical data retrieval and alignment |
+| [brokers/account.py](../src/brokers/account.py) | Account connection and Ticker lookup |
+| [infrastructure/service.py](../src/infrastructure/service.py) | Persistent loop, heartbeat, signals and deadlines |
+| [infrastructure/journal.py](../src/infrastructure/journal.py) | Daily attempt reservations and order IDs |
+| [infrastructure/storage.py](../src/infrastructure/storage.py) | Service state-file writes |
+| [dashboard/app.py](../src/dashboard/app.py) | HTTP configuration API and strategy catalog |
+| [dashboard/static/](../src/dashboard/static/) | Dashboard HTML, CSS and JavaScript |
 
-The existing hyphenated model filename is loaded using `importlib`. Production
-execution uses `Autotrader`; the model module also contains a
-`CrossSectionalTrader` helper, which is not the persistent service's order path.
+Only the stable entry point and package marker remain at the root of src.
+Use package imports such as `from trading.runner import Autotrader`. See
+[drop-in strategies](models.md) for model registration and runtime switching.
 
 ## Component boundaries
 
@@ -49,7 +51,7 @@ for asset eligibility checks before reserving and submitting an order.
 `Autotrader` supplies default components, or accepts explicit `signals`,
 `journal`, and `executor` objects. Tests and alternate implementations can replace
 these independently. `DailySignals` accepts a history provider and an optional
-estimator-backed model. `HistoricalData` receives its data client rather than
+implementation of the shared Model interface and a registry. `HistoricalData` receives its data client rather than
 constructing credentials or authenticating itself.
 
 ```mermaid
@@ -58,7 +60,8 @@ flowchart TD
     Runtime --> Trader[Autotrader coordinator]
     Trader --> Signals[DailySignals]
     Signals --> History[HistoricalData]
-    Signals --> Model[Cross-sectional model]
+    Signals --> Model[Selected Model implementation]
+    Registry[ModelRegistry] --> Signals
     Trader --> Executor[OrderExecutor]
     Trader --> Journal[OrderJournal]
     Executor --> Journal
@@ -68,10 +71,10 @@ flowchart TD
 ```
 
 The environment factory wires concrete Alpaca dependencies together. Scheduling
-remains in `runtime.py`; data loading does not submit orders, signal generation
+remains in `infrastructure/service.py`; data loading does not submit orders, signal generation
 does not modify the journal, and the journal does not contact Alpaca. Configuration
 is validated before the factory logs in. Logging configuration belongs to the
-entry point, not an import of `utils.py`.
+entry point, not an import of `brokers/account.py`.
 
 ## Run tests
 
@@ -96,6 +99,7 @@ automated suite locally.
 | `test_dashboard.py` | HTTP authentication, validation, persistence, status and concurrent edit conflicts |
 | `test_live_settings.py` | Live limits, pause/resume, order caps, cache invalidation and unchanged daily counts |
 | `test_config.py` | Valid account configuration and strict field validation |
+| `test_model_registry.py` | Drop-in discovery, metadata, missing models, live switching and production Trader dispatch |
 | `test_templates.py` | Buy/sell/hold dispatch and conflicting decisions |
 
 The shared fixture supplies fake credentials, disables account dotenv loading,

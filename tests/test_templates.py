@@ -1,7 +1,7 @@
 from unittest.mock import Mock
 
 import pytest
-from modules.templates import Model, Trader
+from core.contracts import Model, Trader
 
 
 class RecordingTrader(Trader):

@@ -1,22 +1,13 @@
 """Completed and aligned equity histories from Alpaca."""
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from alpaca.data.enums import Adjustment, DataFeed
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
-from model_loader import load_model
+from core.types import DailyBar, MarketHistory
 
 NY = ZoneInfo("America/New_York")
-DailyBar = load_model().DailyBar
-
-
-@dataclass(frozen=True)
-class MarketHistory:
-    stocks: dict
-    spy: list
-    sectors: dict
 
 
 class HistoricalData:
