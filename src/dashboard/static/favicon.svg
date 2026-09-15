@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Autotrader</title>
+  <rect width="32" height="32" rx="8" fill="#315e47"/>
+  <path d="m7 23 7-7 4 4 7-11m-8 0h8v8" fill="none" stroke="#dcf1a5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
