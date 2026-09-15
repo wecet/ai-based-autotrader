@@ -1,4 +1,4 @@
-# AI autotrader
+# <img src="src/dashboard/static/favicon.svg" width="32" height="32" alt="Autotrader logo"> AI-Based Autotrader
 
 A persistent, long-only Alpaca **paper-trading** service with selectable models and a cross-sectional
 ranking strategy by default. It evaluates trading opportunities between waits of 60 seconds,
