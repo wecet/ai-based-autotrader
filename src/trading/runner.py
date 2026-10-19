@@ -15,6 +15,7 @@ from infrastructure.storage import write_json
 from trading.execution import OrderExecutor
 from data.historical import HistoricalData, NY
 from infrastructure.journal import OrderJournal
+from infrastructure.performance import PerformanceRecorder
 from trading.signals import DailySignals
 from brokers.account import Account
 
@@ -22,10 +23,11 @@ from brokers.account import Account
 class Autotrader:
     def __init__(self, account, data_client, sectors, state_dir, *, feed=DataFeed.IEX,
                  signals=None, journal=None, executor=None, settings=None,
-                 settings_store=None):
+                 settings_store=None, performance=None):
         if len(sectors) < 2 or any(not key or not value for key, value in sectors.items()):
             raise ValueError("TRADER_UNIVERSE must map at least two stock symbols to sector ETF symbols")
         self.settings_store = settings_store
+        self.performance = performance
         self.settings_revision = None
         self.state_dir = Path(state_dir)
         self.trading_enabled = True
@@ -47,7 +49,8 @@ class Autotrader:
         account = Account().login()
         return cls(account, StockHistoricalDataClient(account.api_key, account.secret_key),
                    settings.universe, state_dir, feed=DataFeed(settings.feed),
-                   settings=settings, settings_store=store)
+                   settings=settings, settings_store=store,
+                   performance=PerformanceRecorder(account.trading_client, state_dir / "performance.json"))
 
     def configure(self, settings):
         self.signals.configure(settings)
@@ -71,6 +74,8 @@ class Autotrader:
 
     def run_once(self):
         self.reload_settings()
+        if self.performance is not None:
+            self.performance.refresh()
         if not self.trading_enabled:
             logging.info("Trading paused by dashboard settings")
             return

@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from configuration.settings import LiveSettingsStore, SettingsConflict, TradingSettings, atomic_text, json_object, serialize_settings
+from infrastructure.performance import read_performance
 
 
 class SaveRequest(BaseModel):
@@ -114,6 +115,14 @@ def create_app(store: LiveSettingsStore, state_dir: Path, key: str, *, allowed_h
     def get_status():
         current = read_settings()
         return {"revision": current.revision, "status": status_payload(state_dir, current.revision)}
+
+    @app.get("/api/performance")
+    def get_performance():
+        try:
+            report = read_performance(state_dir / "performance.json")
+        except (OSError, ValueError):
+            raise HTTPException(503, "Performance history is not available yet. Waiting for the trader to sync with Alpaca.")
+        return report.model_dump(mode="json")
 
     @app.get("/api/export")
     def export():

@@ -33,6 +33,7 @@ Configuration is supplied through environment variables.
 | [brokers/account.py](../src/brokers/account.py) | Account connection and Ticker lookup |
 | [infrastructure/service.py](../src/infrastructure/service.py) | Persistent loop, heartbeat, signals and deadlines |
 | [infrastructure/journal.py](../src/infrastructure/journal.py) | Daily attempt reservations and order IDs |
+| [infrastructure/performance.py](../src/infrastructure/performance.py) | Read-only portfolio history and fill reporting |
 | [infrastructure/storage.py](../src/infrastructure/storage.py) | Service state-file writes |
 | [dashboard/app.py](../src/dashboard/app.py) | HTTP configuration API and strategy catalog |
 | [dashboard/static/](../src/dashboard/static/) | Dashboard HTML, CSS and JavaScript |
@@ -98,6 +99,7 @@ checks the installed wheel and builds the Docker image. See
 | `test_accounts.py` | Credentials, paper client construction, asset lookup and errors |
 | `test_components.py` | Independent component injection, journal limits, account reuse, and universe validation |
 | `test_dashboard.py` | HTTP authentication, validation, persistence, status and concurrent edit conflicts |
+| `test_performance.py` | Cumulative P/L, rolling windows, New York dates, fill pagination and cached failures |
 | `test_live_settings.py` | Live limits, pause/resume, order caps, cache invalidation and unchanged daily counts |
 | `test_config.py` | Valid account configuration and strict field validation |
 | `test_model_registry.py` | Drop-in discovery, metadata, missing models, live switching and production Trader dispatch |

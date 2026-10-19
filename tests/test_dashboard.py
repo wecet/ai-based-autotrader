@@ -150,3 +150,19 @@ def test_api_save_reaches_real_trader_components(panel, tmp_path):
     assert runner.settings_revision == response.json()['revision']
     runner.run_once()
     assert broker.submit_order.call_count == 1
+
+
+def test_performance_requires_auth_and_returns_only_valid_report(panel, tmp_path):
+    from infrastructure.performance import PerformanceReport
+    client, _, key = panel
+    assert client.get('/api/performance').status_code == 401
+    assert client.get('/api/performance', headers=headers(key)).status_code == 503
+    report = PerformanceReport(updated_at=datetime.now(ZoneInfo('UTC')),
+                               totals={'24h': None, 'week': -15, 'month': 20, 'all': 100}, days=[])
+    write_json(tmp_path / 'performance.json', report.model_dump(mode='json'))
+    response = client.get('/api/performance', headers=headers(key))
+    assert response.status_code == 200
+    assert response.json()['totals']['all'] == 100
+    assert response.headers['Cache-Control'] == 'no-store'
+    (tmp_path / 'performance.json').write_text('{"totals": {"all": NaN}}')
+    assert client.get('/api/performance', headers=headers(key)).status_code == 503
