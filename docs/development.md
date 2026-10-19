@@ -27,6 +27,10 @@ Configuration is supplied through environment variables.
 | [models/cross_sectional.py](../src/models/cross_sectional.py) | Existing cross-sectional research strategy |
 | [configuration/settings.py](../src/configuration/settings.py) | Validated live controls, dotenv persistence and revision checks |
 | [trading/runner.py](../src/trading/runner.py) | Broker checks and cycle coordination |
+| [trading/features.py](../src/trading/features.py), [estimators.py](../src/trading/estimators.py), [ranking.py](../src/trading/ranking.py) | Shared point-in-time features, estimators and ranking lifecycle |
+| [trading/allocation.py](../src/trading/allocation.py) | Typed signal allocation and retained-holding exposure reservations |
+| [research/](../src/research/) | Offline walk-forward accounting, frozen datasets and comparisons |
+| [configuration/universe.py](../src/configuration/universe.py) | Versioned candidate catalog and additive configuration updates |
 | [trading/signals.py](../src/trading/signals.py) | Selected model lifecycle and daily preparation |
 | [trading/execution.py](../src/trading/execution.py) | Trader implementation with shared execution guards |
 | [data/historical.py](../src/data/historical.py) | Historical data retrieval and alignment |
@@ -106,6 +110,8 @@ checks the installed wheel and builds the Docker image. See
 | `test_live_settings.py` | Live limits, pause/resume, order caps, cache invalidation and unchanged daily counts |
 | `test_config.py` | Valid account configuration and strict field validation |
 | `test_model_registry.py` | Drop-in discovery, metadata, missing models, live switching and production Trader dispatch |
+| `test_allocation.py`, `test_momentum.py`, `test_boosted_ranker.py` | Shared limits, trend exits, deterministic boosting and purged calibration |
+| `test_research.py`, `test_universe.py` | Accounting, causal execution, costs/delays, frozen inputs and additive catalog updates |
 | `test_templates.py` | Buy/sell/hold dispatch and conflicting decisions |
 
 The shared fixture supplies fake credentials, disables account dotenv loading,

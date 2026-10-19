@@ -115,6 +115,6 @@ and account-wide P/L semantics.
 | Calendar history out of date | Check the displayed sync time and trader logs; Refresh rereads the cache and does not force a broker sync |
 | Unhealthy / restarting | Inspect the preceding cycle exception in logs, not only container status |
 
-The 150-symbol universe has not been established as a successful live-data
+The 230-candidate universe has not been established as a successful live-data
 workload merely by passing offline tests. Download and training time depend on
 broker access and the host.

@@ -12,12 +12,16 @@ for order execution and performance history.
 | `main.py` | CLI, dotenv loading, logging, exclusive process lock and health check |
 | `infrastructure/service.py` | Repeated cycles, deadlines, shutdown signals and heartbeat |
 | `trading/runner.py` | `Autotrader`: dependency wiring, live settings and cycle coordination |
+| `trading/features.py`, `trading/estimators.py`, `trading/ranking.py` | Reusable historical features, estimators and rank-model lifecycle |
+| `trading/allocation.py` | Shared typed signal-to-target allocation for the new strategies |
+| `research/` | Offline datasets, walk-forward evaluation, accounting and stress comparisons |
+| `configuration/universe.py`, `configuration/universe.json` | Versioned 230-candidate catalog and additive configuration updates |
 | `trading/signals.py` | `DailySignals`: model selection, daily preparation and candidate generation |
 | `trading/execution.py` | `OrderExecutor`: shared eligibility, sizing and order submission guards |
 | `data/historical.py` | Retrieve and align completed daily market bars |
 | `core/contracts.py`, `core/types.py` | Model/Trader interfaces and shared data structures |
 | `core/registry.py` | Discover trusted strategy files exporting a `MODEL` definition |
-| `models/` | Cross-sectional strategy and a template for new models |
+| `models/` | Ridge ranking, momentum rotation, boosted ranking and a template for new models |
 | `brokers/account.py` | Shared Alpaca paper account and asset lookup through `Ticker` |
 | `infrastructure/journal.py` | Persist daily attempt reservations and deduplication IDs |
 | `infrastructure/performance.py` | Read-only portfolio history, fill pagination and validated report caching |

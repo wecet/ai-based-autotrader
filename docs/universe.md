@@ -1,85 +1,103 @@
 # Candidate universe
 
-The expanded selection prepared on 2026-09-14 contains **150 distinct
-candidates: 50 equity ETFs and 100 individual stocks**. It is a static research
-selection, not an automatically maintained index or a guarantee that 150 symbols
-will pass the model's filters. The runtime uses the saved dashboard universe, or initially the JSON in
-`TRADER_UNIVERSE`; it does not enforce these counts or fetch the selection list.
+The versioned [candidate catalog](../src/configuration/universe.json), dated
+2026-10-19, contains **230 research candidates**:
 
-## ETF selection
+| Category | Count | Examples |
+| --- | ---: | --- |
+| Established stocks | 136 | AAPL, NVDA, ASML, GOOGL, MSFT, AMZN, META, TSM, JPM, COST, LLY |
+| Specialist / less-followed stocks | 29 | ACLS, AEIS, CAMT, FORM, ONTO, SITM, AVAV, BWXT, CACI, HALO, IRDM |
+| Equity ETFs | 58 | SPY, VOO, VTI, QQQ, IWM, SMH, SOXX, XBI, IHI, ITA, ICLN, GDX |
+| Commodity funds and trusts | 7 | GLD, IAU, SLV, PDBC, DBC, DBA, USO |
 
-“Top 50” means the 50 US-listed **equity** ETFs by reported assets under management
-in the [selection source](https://myetf.app/market/us/asset-class/equity) at the
-time of preparation. It excludes other asset classes and does not mean the
-best-performing funds. The snapshot's symbols, in source order, were:
+These categories describe the curated research mix, not objective market-cap or
+obscurity thresholds. They do not prescribe portfolio weights or guarantee
+selection by a strategy. The catalog extends the previous 150-symbol selection
+by 80 candidates and replaces the obsolete MMC ticker with MRSH. Alphabet is
+represented by GOOGL; GOOG is not additionally included to avoid deliberately
+doubling the company's share classes.
 
-```text
-VOO IVV SPY VTI QQQ VEA VUG IEFA VTV SPYM
-VXUS IEMG VGT VWO IWF IJH XLK VIG SCHD VO
-IJR QQQM RSP ITOT IWD VYM VT VB EFA IWM
-IVW SCHX SMH VEU SCHF SCHG IXUS IWR VV XLF
-SPYG IVE DFAC IWB QUAL VONG JEPI DIA SOXX SCHB
+All current catalog symbols were checked against Alpaca's active, tradable,
+fractionable US-equity asset catalog on 2026-10-19. Availability can change;
+execution checks remain authoritative. Marsh's [ticker change announcement](https://www.marsh.com/en/corp/about/news/marsh-mclennan-to-change-nyse-symbol-to-mrsh.html)
+confirms that MRSH replaced MMC on January 14, 2026. The merge migrates that known
+rename while preserving existing benchmark choices. Historical ticker continuity
+still depends on the data provider and is not repaired by the catalog.
+
+## Apply or customize
+
+The runtime uses saved dashboard settings, or initially `TRADER_UNIVERSE` from
+`.env`. The catalog is an explicit configuration resource; startup does not
+silently replace a custom universe.
+
+Preview the catalog or merge it into your local configuration:
+
+```sh
+uv run python -m configuration.universe --show
+uv run python -m configuration.universe --apply
 ```
 
-Rankings and tickers can change. Updating this snapshot is a deliberate
-configuration change, not something the service does at startup. Edit the active candidate list in the
-[dashboard](dashboard.md); saving invalidates the cached ranking.
+Run `--apply` from the project root. It adds catalog candidates, keeps custom
+symbols and existing benchmark mappings, applies known ticker renames, and
+updates only `TRADER_UNIVERSE` in `.env`. Credentials and other settings are
+preserved. If the configured local `TRADER_CONTROL_DIR/runtime.env` exists,
+it also updates its universe through the revision-checked settings store.
+Model selection, enabled/paused state, risk limits and order journal stay intact.
 
-## Individual stocks
+Recreate both Compose services after changing the root environment:
 
-The stock selection used a reproducible, sector-stratified random sample from a
-curated pool of established companies, with Python seed `20260914`. It was not
-a random sample of every listed stock and did not apply an analyst-upside,
-valuation, or positive-expected-return screen. The model decides whether an
-eligible candidate offers a trade under its own rules.
+```sh
+docker compose up -d --build trader dashboard
+```
 
-| Sector | Benchmark | Stock count |
-| --- | --- | ---: |
-| Information technology | XLK | 20 |
-| Financials | XLF | 15 |
-| Health care | XLV | 15 |
-| Industrials | XLI | 15 |
-| Consumer discretionary | XLY | 10 |
-| Consumer staples | XLP | 8 |
-| Communication services | XLC | 5 |
-| Energy | XLE | 4 |
-| Materials | XLB | 3 |
-| Utilities | XLU | 3 |
-| Real estate | XLRE | 2 |
+A saved runtime file in the Docker control volume takes precedence over root
+`.env`. To merge the same catalog into an existing container's saved controls,
+run this after rebuilding (it makes no broker requests):
 
-The seed alone is insufficient to recreate the exact sample without its original
-pool and ordering. Preserve the actual JSON for reproducibility. Sector labels
-were informed by the [S&P 500 component reference](https://en.wikipedia.org/wiki/List_of_S%26P_500_companies).
+```sh
+docker compose exec -T trader python -c 'import os; from pathlib import Path; from configuration.settings import LiveSettingsStore, TradingSettings; from configuration.universe import merge_candidates; store = LiveSettingsStore(Path(os.environ["TRADER_CONTROL_DIR"])); current = store.read(); updated = TradingSettings.model_validate({**current.settings.model_dump(), "universe": merge_candidates(current.settings.universe)}); store.save(updated, current.revision)'
+```
 
-## ETF benchmark groups
+Alternatively, edit the universe in the [dashboard](dashboard.md). Saving a
+changed universe invalidates the model's cached daily preparation.
 
-The model uses each mapping value both for relative-momentum features and as an
-exposure group. ETF mappings are deliberately coarse:
+## Benchmarks and overlap
 
-| Candidates | Proxy |
-| --- | --- |
-| Broad US, style, size, dividend, and remaining equity funds | SPY |
-| VEA, IEFA, VXUS, EFA, VEU, SCHF, IXUS | EFA |
-| IEMG, VWO | EEM |
-| VGT, XLK, SMH, SOXX | XLK |
-| XLF | XLF |
-| VT | VT |
+Each catalog value is both a relative-feature benchmark and an allocation group.
+Individual stocks use sector ETFs such as XLK, XLF, XLV and XLI. Broad US equity
+funds generally use SPY, international funds use EFA or EEM, technology funds use
+XLK, and specialist equity funds use their stated sector or thematic benchmark.
+The checked-in JSON is the authoritative mapping.
 
-A fund mapped to itself has zero sector-relative momentum. Broad funds can
-share underlying holdings with each other and with individual stocks. The
-20% group limit does not measure underlying sector exposure across fund holdings.
-Changing a proxy changes both the feature and the allocation group.
+Commodity funds use underlying-exposure groups: GLD/IAU share GLD; PDBC/DBC
+share PDBC; SLV, DBA and USO use themselves. A self-benchmarked fund has zero
+benchmark-relative momentum. Gold and silver trusts provide commodity exposure
+through listed securities; futures-based funds also reflect roll effects and
+fund expenses. These are not direct commodity or futures contracts. See the
+[issuer's commodity fund overview](https://www.ishares.com/us/products/commodity-etps).
 
-## Eligibility and practical limits
+Multiple ETFs can hold the same stocks, and fund candidates overlap individual
+stock candidates. A benchmark-group cap is not a look-through sector or issuer
+cap. Catalog balance does not imply that the resulting portfolio is balanced
+across categories; that would require a separately researched allocation policy.
 
-All candidates, including ETFs, go through the same daily-bar pipeline. Their
-sessions and their proxy's sessions must exactly match SPY's returned history.
-Recent listings, ticker changes, missing data, low prices, and insufficient
-venue volume can exclude candidates. Before an order, Alpaca must report the
-asset as tradable and fractionable.
+## Eligibility and research limits
 
-150 candidates do not mean 150 positions. By default the model selects at most five target
-positions and the runner attempts at most 10 orders per day. Both limits are
-editable in the dashboard. Existing holdings
-outside the eligible universe are retained and reduce the new allocation budget.
-See [trading behavior](trading.md) for the exact limits.
+Candidates and their proxies must have completed sessions aligned with SPY.
+Recent listings, ticker changes, missing data, low prices and low venue volume
+can exclude candidates. The new strategies preserve price-above-$10 and average
+daily dollar-volume-above-$5-million filters. IEX volume covers that venue and
+can exclude otherwise active securities. Each submitted asset must still be
+tradable and fractionable according to Alpaca.
+
+A list of 230 candidates does not mean 230 holdings. By default, configured
+limits allow five targets and ten daily order attempts. The original model
+remains selected until explicitly changed. Existing holdings outside usable
+histories are retained and consume exposure budget. See [trading behavior](trading.md)
+and [strategy research](research.md).
+
+This catalog is a static present-day research selection. Backtesting it through
+older dates introduces survivorship and selection bias. The daily data provider
+currently supplies split-adjusted prices rather than a complete total-return
+ledger. Point-in-time membership, delisted securities and corporate-action-aware
+research are tracked in [issue #2](https://github.com/wecet/ai-based-autotrader/issues/2).

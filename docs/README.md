@@ -8,7 +8,8 @@ model defaults are distinguished from broker account settings and live results.
 | [Dashboard and performance calendar](dashboard.md) | Live controls, access key, daily P/L, trade fills, and reporting freshness |
 | [Drop-in strategies](models.md) | Model interface, discovery, metadata, and runtime selection |
 | [Configuration](configuration.md) | Required credentials, environment defaults, and JSON universe format |
-| [Universe](universe.md) | The 50-ETF / 100-stock selection and benchmark mapping |
+| [Universe](universe.md) | Versioned 230-candidate catalog, additive updates, commodity funds and benchmark mapping |
+| [Strategy research](research.md) | Momentum and boosted ranking, offline evaluation, final-test isolation and research roadmap |
 | [Trading behavior](trading.md) | Feature generation, training, allocation, and execution |
 | [Deployment and operations](operations.md) | Start, stop, update, health checks, state, and errors |
 | [Development and testing](development.md) | Source layout, offline tests, VS Code, and conventions |

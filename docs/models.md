@@ -5,6 +5,11 @@ The runtime discovers strategy files in `src/models/`. Each file exports a
 `Model` class. The dashboard reads those definitions; it does not maintain a
 separate list of strategy names or descriptions.
 
+The shipped strategies are `cross_sectional` (ridge baseline),
+`momentum_rotation` (trend and inverse volatility), and `boosted_ranker`
+(nonlinear ranks with chronological return calibration). See
+[strategy research](research.md) for their methods and validation.
+
 One strategy is active at a time. The selection is stored as `TRADER_MODEL` in
 the shared runtime settings file. Its value is the Python filename without
 `.py`, such as `cross_sectional`. The current strategy is shown as a checked
@@ -64,8 +69,10 @@ An override of `configure` should call `super().configure(settings)`.
 `MarketHistory` supplies candidate histories, SPY history, and benchmark ETF
 histories. Each `DailyBar` carries its date and OHLCV values. `PortfolioLimits`
 carries total exposure, benchmark-group exposure, per-position exposure, and
-target-position count. `TradeCandidate` carries the symbol, expected return,
+target-position count. `TradeCandidate` carries the symbol, optional expected return,
 price, sector/group, desired/current weights, account value, and cost estimates.
+A mathematical score must not be represented as a return forecast; momentum
+leaves `predicted_return=None` and uses its own target-based entry decisions.
 Its order notional is the absolute weight change multiplied by account value.
 
 Each model must apply the supplied portfolio limits when generating targets,
@@ -107,8 +114,10 @@ model that becomes unavailable causes the trader to fail rather than silently
 fall back to another strategy. Imports are cached in a running process; restart
 or rebuild after editing an existing model's code.
 
-The existing strategy is now [cross_sectional.py](../src/models/cross_sectional.py).
-Its research helpers and behavior are preserved, but its former hyphenated
+The original linear strategy is exposed through [cross_sectional.py](../src/models/cross_sectional.py).
+Its research helpers remain available through compatibility re-exports from
+`trading/features.py`, `trading/estimators.py` and `trading/ranking.py`.
+Its former hyphenated
 filename has been normalized for package imports. Old runtime settings files
 without `TRADER_MODEL` are read with the `cross_sectional` default, preserving
 all other saved limits. The next dashboard save includes the new key.

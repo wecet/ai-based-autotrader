@@ -1,10 +1,11 @@
 # <img src="src/dashboard/static/favicon.svg" width="32" height="32" alt="Autotrader logo"> AI-Based Autotrader
 
 A persistent, long-only Alpaca **paper-trading** service with selectable models and a cross-sectional
-ranking strategy by default. It evaluates trading opportunities between waits of 60 seconds,
+ranking strategy by default. Momentum rotation and boosted-tree ranking are also
+available through the model selector. It evaluates trading opportunities between waits of 60 seconds,
 uses completed daily bars for its signals, and defaults to at most **10 order
 attempts per New York trading day**, adjustable in the dashboard. The intended expanded universe contains
-50 equity ETFs and 100 individual stocks; the actual candidates come from your
+136 established stocks, 29 specialist stocks, 58 equity ETFs and 7 commodity funds; the actual candidates come from your
 `TRADER_UNIVERSE` configuration.
 
 ## Getting started
@@ -52,6 +53,21 @@ The model can generate multiple orders in a day, but it refreshes its predictive
 signals daily. Universe inclusion and a healthy container do not establish
 profitability or successful order fills.
 
+## Strategy research
+
+Compare the three models offline using the shared walk-forward harness:
+
+```sh
+uv run python -m research --demo /tmp/strategy-demo.json
+```
+
+The synthetic demo verifies the pipeline; it does not demonstrate profitability.
+See [strategy research](docs/research.md) for frozen datasets, reserved final-test
+periods, cost/delay stress cases, and the linked GitHub research roadmap.
+To merge the versioned candidate list into an existing local universe, use
+`uv run python -m configuration.universe --apply`; see [universe setup](docs/universe.md)
+for saved Docker settings and benchmark preservation.
+
 ## Repository layout
 
 - `src/`: trader, broker adapters, infrastructure, and web portal.
@@ -69,9 +85,10 @@ test caches, coverage files, and macOS metadata are generated and ignored.
 Start with the [documentation index](docs/README.md).
 
 - [Dashboard and performance calendar](docs/dashboard.md): edit controls, review daily P/L, and inspect trade fills.
+- [Strategy research](docs/research.md): model methods, offline comparisons, validation, and upcoming work.
 - [Drop-in strategies](docs/models.md): add a model file and select it at runtime.
 - [Configuration](docs/configuration.md): environment variables and universe format.
-- [Universe](docs/universe.md): ETF selection, stock sampling, benchmark groups, and eligibility.
+- [Universe](docs/universe.md): versioned stock, ETF and commodity candidates, benchmark groups, and eligibility.
 - [Trading behavior](docs/trading.md): data, ranking, portfolio targets, and order limits.
 - [Deployment and operations](docs/operations.md): Docker lifecycle, health, state, and troubleshooting.
 - [Development and testing](docs/development.md): architecture, pytest, VS Code, and coding conventions.
