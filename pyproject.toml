@@ -31,7 +31,7 @@ py-modules = ["main"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["brokers*", "configuration*", "core*", "dashboard*", "data*", "infrastructure*", "models*", "trading*"]
+include = ["brokers*", "configuration*", "core*", "dashboard*", "data*", "infrastructure*", "models*", "trading*", "research*"]
 namespaces = false
 
 [tool.setuptools.package-data]
