@@ -32,7 +32,7 @@ class TradeCandidate:
     """One symbol's desired state after ranking and risk constraints."""
 
     symbol: str
-    predicted_return: float
+    predicted_return: float | None
     percentile_rank: float
     price: float
     sector: str
