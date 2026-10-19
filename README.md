@@ -49,6 +49,18 @@ The model can generate multiple orders in a day, but it refreshes its predictive
 signals daily. Universe inclusion and a healthy container do not establish
 profitability or successful order fills.
 
+## Repository layout
+
+- `src/`: trader, broker adapters, infrastructure, and web portal.
+- `tests/`: offline automated tests.
+- `docs/`: configuration, operations, and development guides.
+- `scripts/`: package verification and the optional `check_account.py` paper-account diagnostic.
+- `libs/`: Git submodules; see [submodule setup](libs/README.md).
+- `build_files/`: Docker build definitions.
+
+Local `.env`, `.venv/`, and `state/` stay outside version control. Build output,
+test caches, coverage files, and macOS metadata are generated and ignored.
+
 ## Documentation
 
 Start with the [documentation index](docs/README.md).

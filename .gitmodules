@@ -1,0 +1,3 @@
+[submodule "skills"]
+	path = libs/skills
+	url = https://github.com/wecet/skills.git

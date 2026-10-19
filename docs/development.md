@@ -130,3 +130,16 @@ suite and health-check interface when changing startup behavior.
 
 Run the companion UI with `PYTHONPATH=src uv run python -m dashboard`. See
 [the dashboard guide](dashboard.md) for its access key and API.
+
+## Workspace organization
+
+Git submodules live under `libs/`; initialize them with
+`git submodule update --init --recursive`. See [libs/README.md](../libs/README.md).
+They are optional development resources, excluded from runtime builds.
+Standalone diagnostics and packaging checks belong in `scripts/`. The optional
+`uv run python scripts/check_account.py` diagnostic reads the paper account
+using your local credentials; it is not an offline test.
+
+Keep generated `build/`, `dist/`, coverage reports, bytecode and test caches out
+of version control. Preserve `.env`, `.venv/` and persistent `state/` when
+cleaning the workspace.
