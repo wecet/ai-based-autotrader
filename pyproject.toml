@@ -35,6 +35,7 @@ include = ["brokers*", "configuration*", "core*", "dashboard*", "data*", "infras
 namespaces = false
 
 [tool.setuptools.package-data]
+configuration = ["universe.json"]
 dashboard = ["static/*.html", "static/*.css", "static/*.js", "static/*.svg", "static/*.png"]
 
 [dependency-groups]
