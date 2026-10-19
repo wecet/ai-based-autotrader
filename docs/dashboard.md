@@ -73,6 +73,40 @@ The remaining target is not automatically split into further orders: the same
 symbol/side/target fingerprint is still attempted only once that day. A cap can
 therefore leave a position short of its target, including a partial reduction.
 
+## Performance calendar
+
+After unlocking, choose **Performance calendar**. Green dates show a gain, red
+dates show a loss, and neutral dates indicate flat P/L or unavailable history.
+Select any past or current date to open its net account P/L and completed trade
+fills, including execution time, symbol, side, quantity, price, and value.
+Partial fills appear individually. Pending, rejected, and cancelled unfilled
+orders do not appear as trades.
+
+The total above the calendar defaults to **All time**. Switch between:
+
+- **24hr**: rolling 24-hour P/L using five-minute broker history.
+- **1 week**: the last seven New York calendar days, including today.
+- **1 month**: the last 30 New York calendar days, including today.
+- **All time**: all available broker portfolio history.
+
+P/L uses the paper account's portfolio history, including changes in open
+positions; execution values are not treated as profits. The report covers the
+whole account, including trades outside this bot. Dates use America/New_York,
+consistent with the order budget. Missing history displays an unavailable value
+rather than assuming zero.
+
+The trader syncs read-only Alpaca portfolio history and paginated fill activity
+into `state/performance.json` at most once every five minutes, including while
+paused or the market is closed. The dashboard reads that file without broker
+credentials. The page refreshes its cached report every minute while open; its
+**Refresh** button rereads the cache. The last sync time is shown, with a stale
+notice after ten minutes. Sync failures retain the previous valid report and
+are logged without interrupting order execution. A new deployment must rebuild
+both services before history becomes available.
+
+Portfolio calculations follow [Alpaca's portfolio history API](https://docs.alpaca.markets/us/reference/getaccountportfoliohistory-1);
+fill pagination follows [Alpaca's account activities API](https://docs.alpaca.markets/us/docs/account-activities).
+
 ## How realtime updates work
 
 The root `.env` supplies startup defaults. Saving in the dashboard writes only
@@ -126,6 +160,7 @@ The API is protected by `Authorization: Bearer <dashboard-key>`:
 | `GET /api/settings` | Current allowlisted values, revision, and runner status |
 | `PUT /api/settings` | Save `{ "revision": "…", "settings": { … } }` |
 | `GET /api/models` | Available model names, descriptions, IDs and load errors |
+| `GET /api/performance` | Cached account P/L, daily breakdown and completed fills; 503 until available |
 | `GET /api/status` | Acknowledgement, heartbeat state, and today's attempt count |
 | `GET /api/export` | Download the allowlisted runtime `.env` |
 | `GET /healthz` | Dashboard health check, without authentication |

@@ -26,6 +26,9 @@ it with the separate dashboard key:
 docker compose exec dashboard cat /app/control/dashboard.key
 ```
 
+The **Performance calendar** page shows daily account gains and losses, completed
+trade fills, and net P/L for 24 hours, one week, one month, or all available history.
+
 See the [dashboard guide](docs/dashboard.md) for live-update timing, access,
 and the shared runtime settings file.
 

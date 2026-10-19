@@ -211,3 +211,103 @@ setInterval(async () => {
   } catch { $("health-label").textContent = "○  Dashboard connection interrupted"; }
   finally { polling = false; }
 }, 5000);
+
+let performanceReport = null, performanceRange = "all", performanceLoading = false;
+const nyDate = date => new Intl.DateTimeFormat("en-CA", {timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit"}).format(date);
+const currentMonth = () => nyDate(new Date()).slice(0, 7);
+let calendarMonth = currentMonth();
+const money = (value, signed = true) => value === null || value === undefined ? "—" : new Intl.NumberFormat("en-US", {style: "currency", currency: "USD", signDisplay: signed ? "exceptZero" : "auto"}).format(value);
+const pnlClass = value => value > 0 ? "pnl-positive" : value < 0 ? "pnl-negative" : "";
+function renderPerformance() {
+  const total = performanceReport?.totals[performanceRange];
+  $("performance-total").textContent = money(total);
+  $("performance-total").className = pnlClass(total);
+  $("performance-period").textContent = ({"24h": "LAST 24 HOURS", week: "LAST 7 DAYS", month: "LAST 30 DAYS", all: "ALL TIME"})[performanceRange] + " · NET GAIN / LOSS";
+  for (const button of document.querySelectorAll("[data-range]")) button.setAttribute("aria-pressed", String(button.dataset.range === performanceRange));
+  const [year, month] = calendarMonth.split("-").map(Number);
+  const first = new Date(Date.UTC(year, month - 1, 1));
+  $("calendar-month").textContent = new Intl.DateTimeFormat("en-US", {month: "long", year: "numeric", timeZone: "UTC"}).format(first);
+  const container = $("calendar-days"); container.replaceChildren();
+  const offset = (first.getUTCDay() + 6) % 7;
+  for (let index = 0; index < offset; index++) {
+    const blank = document.createElement("div"); blank.className = "calendar-blank"; container.append(blank);
+  }
+  const days = new Map((performanceReport?.days || []).map(day => [day.date, day]));
+  const today = nyDate(new Date());
+  for (let number = 1; number <= new Date(Date.UTC(year, month, 0)).getUTCDate(); number++) {
+    const date = calendarMonth + "-" + String(number).padStart(2, "0");
+    const day = days.get(date);
+    const button = document.createElement("button"); button.type = "button";
+    button.className = "calendar-day " + pnlClass(day?.pnl);
+    if (date === today) { button.classList.add("is-today"); button.setAttribute("aria-current", "date"); }
+    const label = document.createElement("span"); label.textContent = number;
+    const pnl = document.createElement("strong"); pnl.textContent = money(day?.pnl);
+    const count = document.createElement("small"); count.textContent = day ? day.trades.length + (day.trades.length === 1 ? " fill" : " fills") : "No data";
+    button.append(label, pnl, count);
+    button.setAttribute("aria-label", date + ": " + (day?.pnl == null ? "P/L unavailable" : money(day.pnl)) + ", " + (day?.trades.length || 0) + " completed fills");
+    button.disabled = date > today || !performanceReport;
+    button.addEventListener("click", () => openPerformanceDay(date, day)); container.append(button);
+  }
+}
+function openPerformanceDay(date, day) {
+  $("day-title").textContent = new Intl.DateTimeFormat("en-US", {dateStyle: "long", timeZone: "UTC"}).format(new Date(date + "T12:00:00Z"));
+  $("day-pnl").textContent = day?.pnl == null ? "P/L unavailable for this date" : money(day.pnl) + " net";
+  $("day-pnl").className = "day-pnl " + pnlClass(day?.pnl);
+  const body = $("day-trades"); body.replaceChildren();
+  const trades = day?.trades || [];
+  $("day-empty").hidden = trades.length > 0;
+  $("day-trade-count").textContent = trades.length + " completed trade fills";
+  for (const trade of trades) {
+    const row = document.createElement("tr");
+    const time = new Intl.DateTimeFormat("en-US", {timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", second: "2-digit"}).format(new Date(trade.time));
+    for (const value of [time, trade.symbol, trade.side.replaceAll("_", " "), new Intl.NumberFormat("en-US", {maximumFractionDigits: 9}).format(trade.quantity), money(trade.price, false), money(trade.price * trade.quantity, false)]) {
+      const cell = document.createElement("td"); cell.textContent = value; row.append(cell);
+    }
+    body.append(row);
+  }
+  $("day-dialog").showModal();
+}
+async function loadPerformance() {
+  if (!key || performanceLoading) return;
+  performanceLoading = true; $("performance-refresh").disabled = true;
+  const requestKey = key;
+  try {
+    const data = await (await api("/api/performance")).json();
+    if (!key || key !== requestKey) return;
+    performanceReport = data; renderPerformance();
+    const updated = new Date(data.updated_at);
+    const stale = Date.now() - updated.getTime() > 10 * 60 * 1000;
+    $("performance-status").textContent = (stale ? "History may be out of date. Last synced " : "Last synced ") + updated.toLocaleString() + ". Trader syncs every five minutes.";
+    $("performance-status").className = stale ? "field-note error-text" : "field-note";
+  } catch (error) {
+    if (!key || key !== requestKey) return;
+    $("performance-status").textContent = error.message + (performanceReport ? " Showing the last loaded history." : "");
+    $("performance-status").className = "field-note error-text";
+  } finally { performanceLoading = false; $("performance-refresh").disabled = false; }
+}
+function showDashboardPage(performance) {
+  $("performance-page").hidden = !performance; $("settings-page").hidden = performance;
+  $("performance-tab").setAttribute("aria-current", performance ? "page" : "false");
+  $("settings-tab").setAttribute("aria-current", performance ? "false" : "page");
+  if (performance) { renderPerformance(); loadPerformance(); }
+}
+$("performance-tab").addEventListener("click", () => showDashboardPage(true));
+$("settings-tab").addEventListener("click", () => showDashboardPage(false));
+$("performance-refresh").addEventListener("click", loadPerformance);
+for (const button of document.querySelectorAll("[data-range]")) button.addEventListener("click", () => { performanceRange = button.dataset.range; renderPerformance(); });
+function moveMonth(offset) {
+  const [year, month] = calendarMonth.split("-").map(Number);
+  calendarMonth = new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7); renderPerformance();
+}
+$("calendar-prev").addEventListener("click", () => moveMonth(-1));
+$("calendar-next").addEventListener("click", () => moveMonth(1));
+$("calendar-today").addEventListener("click", () => { calendarMonth = currentMonth(); renderPerformance(); });
+$("day-close").addEventListener("click", () => $("day-dialog").close());
+$("lock").addEventListener("click", () => {
+  if (key) return; // The existing handler may have cancelled locking a dirty draft.
+  performanceReport = null; renderPerformance(); $("day-dialog").close();
+  $("day-trades").replaceChildren(); $("day-pnl").textContent = "";
+  $("performance-status").textContent = "Loading performance history…";
+  showDashboardPage(false);
+});
+setInterval(() => { if (key && !$("performance-page").hidden) loadPerformance(); }, 60000);
