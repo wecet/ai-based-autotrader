@@ -1,8 +1,10 @@
-# Live settings dashboard
+# Dashboard and performance calendar
 
 The **Control room** is a small web app in the same Compose project as the trader.
 It edits a validated set of trading controls without restarting the trading
-process. It does not log in to Alpaca or submit orders itself.
+process and displays cached account performance and completed trade fills.
+The trader fetches broker history; the dashboard does not log in to Alpaca or
+submit orders itself.
 
 ## Start and unlock
 
@@ -32,7 +34,9 @@ docker compose up -d --build dashboard
 ```
 
 A dashboard alone can save settings, but they remain pending until a trader
-running the updated code picks them up. For an existing installation, recreate
+running the updated code picks them up. Performance requires a report from the
+trader; a dashboard running alone can only show an existing cached report.
+For an existing installation, recreate
 both services with the rebuilt image to enable live configuration.
 
 The port is published on host loopback only. For a remote Docker host, use an SSH
@@ -96,7 +100,8 @@ consistent with the order budget. Missing history displays an unavailable value
 rather than assuming zero.
 
 The trader syncs read-only Alpaca portfolio history and paginated fill activity
-into `state/performance.json` at most once every five minutes, including while
+into `TRADER_STATE_DIR/performance.json` (`state/performance.json` locally,
+`/app/state/performance.json` in Compose) at most once every five minutes, including while
 paused or the market is closed. The dashboard reads that file without broker
 credentials. The page refreshes its cached report every minute while open; its
 **Refresh** button rereads the cache. The last sync time is shown, with a stale
@@ -186,6 +191,9 @@ The implementation is split between `configuration/settings.py` (schema and pers
 and passes them to `DailySignals` and `OrderExecutor`. API and execution tests
 cover saves, conflicts, authentication, pause/resume, order caps, cache invalidation,
 and daily-budget preservation without contacting the broker.
+`infrastructure/performance.py` owns report collection, validation, and caching;
+its offline tests check cumulative P/L differences, rolling windows, New York
+dates, fill pagination, and retention of the last valid report on failure.
 
 See [drop-in strategies](models.md) for the source-file contract. New model
 files require rebuilding both containers; the checkbox switches existing models

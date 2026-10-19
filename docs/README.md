@@ -5,7 +5,7 @@ model defaults are distinguished from broker account settings and live results.
 
 | Guide | Contents |
 | --- | --- |
-| [Live settings dashboard](dashboard.md) | Realtime controls, access key, and settings persistence |
+| [Dashboard and performance calendar](dashboard.md) | Live controls, access key, daily P/L, trade fills, and reporting freshness |
 | [Drop-in strategies](models.md) | Model interface, discovery, metadata, and runtime selection |
 | [Configuration](configuration.md) | Required credentials, environment defaults, and JSON universe format |
 | [Universe](universe.md) | The 50-ETF / 100-stock selection and benchmark mapping |
@@ -15,6 +15,8 @@ model defaults are distinguished from broker account settings and live results.
 
 For a first deployment, read configuration and universe before starting the
 container. For a service that is running without placing orders, use the
-trading behavior and operations guides.
+trading behavior and operations guides. For daily results and completed trade
+fills, use the performance calendar in the dashboard. Optional development
+submodules and clone instructions are documented in [libs/README.md](../libs/README.md).
 
 Return to the [project README](../README.md).

@@ -9,8 +9,11 @@ See [drop-in strategies](models.md) for their interface and switching behavior.
 
 The runner performs these checks sequentially:
 
-Before these checks, the runner reloads saved dashboard settings, including the selected model, and returns
-without broker calls if trading is paused.
+Before these checks, the runner reloads saved dashboard settings, including the
+selected model, and refreshes account performance history when due. Pausing
+prevents new order submissions; read-only reporting still contacts Alpaca at
+most once every five minutes. A paused cycle returns before the execution
+checks below.
 
 1. Read Alpaca's clock; wait if the market is closed.
 2. Read the persisted journal for the New York date; wait if the configured daily budget is used.

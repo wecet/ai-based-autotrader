@@ -31,7 +31,7 @@ on host loopback; see [dashboard access](dashboard.md). Logs rotate at 10 MB wit
 | Stop intentionally | `docker compose stop trader` |
 | Resume | `docker compose up -d trader` |
 | Apply changed `.env` | `docker compose up -d --force-recreate trader` |
-| Apply source/dependency changes | `docker compose up -d --build trader` |
+| Apply source/dependency changes | `docker compose up -d --build trader dashboard` |
 | Open control room | http://localhost:8080 |
 | Check heartbeat now | `docker compose exec trader python src/main.py --healthcheck` |
 
@@ -78,6 +78,7 @@ Compose stores these files in its project-scoped `trader-state` named volume:
 | `orders.json` | Current recorded day's attempted target fingerprints |
 | `heartbeat.json` | Recent runner health; removed on normal loop exit |
 | `applied-settings.json` | Last settings revision loaded by the trader |
+| `performance.json` | Cached account P/L, daily totals and completed fills for the calendar |
 | `runner.lock` | Exclusive process lock for this state directory |
 
 The journal is written through a temporary file and replacement. Preserve the
@@ -86,6 +87,15 @@ or changing the Compose project name can give the service an empty journal and
 lose its daily count. Stop the service before backing up state. Restoring an
 older journal can omit attempts made afterward; reconcile those against the
 broker before resuming. Do not clear a corrupt journal just to silence an error.
+
+Performance reporting uses the existing trader credentials and writes its report
+atomically. It runs at most once every five minutes, even when trading is paused
+or the market is closed. The dashboard polls the report every minute while its
+calendar is open and flags reports older than ten minutes. A healthy heartbeat
+can coexist with a stale report: ordinary reporting failures are logged and
+retain the last valid cache. Reporting runs within the existing cycle deadline.
+See [the calendar guide](dashboard.md#performance-calendar) for range definitions
+and account-wide P/L semantics.
 
 ## Troubleshooting
 
@@ -101,6 +111,8 @@ broker before resuming. Do not clear a corrupt journal just to silence an error.
 | Insufficient liquid stocks | IEX venue volume may fail the $5 million filter; review feed and candidates |
 | Cycle deadline exceeded | Check broker latency and training cost for the configured universe |
 | Invalid order state | Preserve the journal and reconcile with broker orders before repair |
+| Calendar unavailable / API 503 | Rebuild both services, start the trader, and check its logs for `Performance refresh failed`; the cache must exist and validate |
+| Calendar history out of date | Check the displayed sync time and trader logs; Refresh rereads the cache and does not force a broker sync |
 | Unhealthy / restarting | Inspect the preceding cycle exception in logs, not only container status |
 
 The 150-symbol universe has not been established as a successful live-data

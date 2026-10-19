@@ -12,7 +12,11 @@ uv build
 ```
 
 `dist/` contains a wheel (`.whl`) and source distribution (`.tar.gz`). The wheel
-includes all runtime packages, both console commands and dashboard static assets.
+includes all runtime packages, both console commands and dashboard static assets,
+including the performance calendar. `MANIFEST.in` also includes documentation,
+offline tests, diagnostic scripts, submodule setup guidance, and the repository
+coding conventions in the source archive. The `libs/skills` submodule contents
+are optional development resources and are not runtime dependencies.
 Install it into a dedicated Python 3.13 virtual environment:
 
 ```sh

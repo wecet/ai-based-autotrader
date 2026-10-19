@@ -50,8 +50,8 @@ it neither logs in nor opens another connection. `OrderExecutor` uses `Ticker`
 for asset eligibility checks before reserving and submitting an order.
 
 `Autotrader` supplies default components, or accepts explicit `signals`,
-`journal`, and `executor` objects. Tests and alternate implementations can replace
-these independently. `DailySignals` accepts a history provider and an optional
+`journal`, `executor`, and `performance` objects. Tests and alternate
+implementations can replace these independently. `DailySignals` accepts a history provider and an optional
 implementation of the shared Model interface and a registry. `HistoricalData` receives its data client rather than
 constructing credentials or authenticating itself.
 
@@ -65,6 +65,9 @@ flowchart TD
     Registry[ModelRegistry] --> Signals
     Trader --> Executor[OrderExecutor]
     Trader --> Journal[OrderJournal]
+    Trader --> Performance[PerformanceRecorder]
+    Performance --> Report[performance.json]
+    Report --> Dashboard[Read-only dashboard]
     Executor --> Journal
     Executor --> Ticker[Ticker]
     Ticker --> Account[Shared Account]
@@ -122,9 +125,8 @@ debug actions for a module or individual test.
 
 ## Conventions
 
-Follow [AGENTS.md](../AGENTS.md) and the persistent
-[coding conventions](../.agents/coding-conventions.md). Use explicit attribute
-access and assignments; avoid dynamic attribute helpers and `argparse`. Restore
+Follow the persistent [coding conventions](../.agents/coding-conventions.md).
+Use explicit attribute access and assignments; avoid dynamic attribute helpers and `argparse`. Restore
 test replacements in `finally` blocks or fixture teardown. Preserve the offline
 suite and health-check interface when changing startup behavior.
 

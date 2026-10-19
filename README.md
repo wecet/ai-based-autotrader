@@ -27,7 +27,10 @@ docker compose exec dashboard cat /app/control/dashboard.key
 ```
 
 The **Performance calendar** page shows daily account gains and losses, completed
-trade fills, and net P/L for 24 hours, one week, one month, or all available history.
+trade fills, and net P/L for a rolling 24 hours, the last 7 or 30 New York
+calendar days, or all available broker history. P/L includes open positions and
+all activity in the paper account. Rebuild both services to enable reporting;
+the trader syncs history at most once every five minutes.
 
 See the [dashboard guide](docs/dashboard.md) for live-update timing, access,
 and the shared runtime settings file.
@@ -65,7 +68,7 @@ test caches, coverage files, and macOS metadata are generated and ignored.
 
 Start with the [documentation index](docs/README.md).
 
-- [Live settings dashboard](docs/dashboard.md): edit controls and see when they apply.
+- [Dashboard and performance calendar](docs/dashboard.md): edit controls, review daily P/L, and inspect trade fills.
 - [Drop-in strategies](docs/models.md): add a model file and select it at runtime.
 - [Configuration](docs/configuration.md): environment variables and universe format.
 - [Universe](docs/universe.md): ETF selection, stock sampling, benchmark groups, and eligibility.
