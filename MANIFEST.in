@@ -1,5 +1,6 @@
 include uv.lock
 include src/readme.md
+include src/models/README.md
 include src/__init__.py
 include libs/README.md
 include .agents/coding-conventions.md

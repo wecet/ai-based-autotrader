@@ -16,6 +16,9 @@ the shared runtime settings file. Its value is the Python filename without
 card in the dashboard. Choosing another card selects it exclusively; use the
 pause control to disable order submissions.
 
+For detailed formulas, feature definitions, calibration windows, allocation
+behavior and limitations, see the [model implementation README](../src/models/README.md).
+
 ## Add a model
 
 1. Copy [the template](../src/models/_template.py) to a new file in `src/models/`,
