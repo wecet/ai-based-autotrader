@@ -1,6 +1,6 @@
 # Strategy research and evaluation
 
-The dashboard discovers six daily, long-only strategies. Only one is active;
+The dashboard discovers seven daily, long-only strategies. Only one is active;
 installing a strategy does not select it or change saved risk settings.
 
 | Model ID | Method | Interpretation |
@@ -10,6 +10,7 @@ installing a strategy does not select it or change saved risk settings.
 | `boosted_ranker` | Histogram gradient-boosted return ranks with a later return-calibration window | Estimated five-session return, used only when its calibrated edge exceeds costs |
 | `meta_momentum` | Momentum rotation entries accepted only when a classifier, trained on past rule outcomes, predicts a net gain | Classifier probability gates entries; momentum score and sizing are unchanged |
 | `regime_composite` | Causal trend/range/stress regimes choose momentum or residual reversion and scale exposure | Filtered regime probabilities; the active component's score |
+| `temporal_network` | Compact causal temporal convolutional network on 32-session return/volume sequences, with purged return calibration | Estimated five-session return, used only when its calibrated edge exceeds costs |
 | `residual_reversion` | Long-only entries on unusually weak five-session residuals versus SPY and the group benchmark | Standardized residual score, not a return forecast |
 
 ## Model boundaries
@@ -153,7 +154,7 @@ from repeated tests on the final interval.
 | `RESEARCH_SPREAD_BPS` | `5` | Per-side spread impact assumption |
 | `RESEARCH_SLIPPAGE_BPS` | `5` | Per-side slippage assumption |
 | `RESEARCH_FEE_BPS` | `0` | Per-side fee assumption |
-| `RESEARCH_EXPERIMENT` | `baselines` | `baselines`, `allocation` (sizing methods), `reversion` (residual reversion variants), `meta_momentum` or `regime` |
+| `RESEARCH_EXPERIMENT` | `baselines` | `baselines`, `allocation` (sizing methods), `reversion` (residual reversion variants), `meta_momentum`, `regime` or `temporal` |
 | `RESEARCH_TRIAL_LOG` | `research-trials.jsonl` beside the output | Append-only record of every run, including failures |
 
 The CLI uses `TradingSettings` defaults and any exported `TRADER_*` overrides,
@@ -272,6 +273,33 @@ reversion and boosted ranking, including cost and delay stress. It adds
 mean spell length, mean stress probability and mean dominant-regime probability.
 On the synthetic demo, the filtered probabilities are near certain, `range`
 dominates, and the composite rarely trades. Treat this as a pipeline check only.
+
+## Compact temporal network
+
+`trading/temporal.py` implements a small temporal convolutional network in NumPy,
+so no deep-learning dependency is required. It has three dilated causal
+convolution layers (kernel 3, dilations 1/2/4, width 8, ReLU) read out at the
+final session. Gradients are written by hand and checked against finite
+differences in the tests. The `TrainingBudget` is declared before training: 20
+epochs, batch 256, Adam with learning rate 0.001, weight decay 0.0001, seed 0.
+Channel standardization is fitted on each training fold only.
+
+Each input is the last 32 sessions of four channels: daily return, return minus
+SPY, return minus the group benchmark, and log volume relative to its 20-session
+average. The same price and liquidity filters as the other models apply. Targets
+are within-date ranks of the five-session forward return. `models/temporal_network.py`
+fits on the earliest 80% of labeled dates minus a five-date purge and calibrates
+ranks to returns on the remaining dates. Every symbol on a date stays in the same
+fold. Allocation and trade decisions follow boosted ranking. It needs 120 labeled
+sessions to prepare.
+
+`RESEARCH_EXPERIMENT=temporal` compares it with boosted ranking and momentum,
+including cost and delay stress. It adds `retraining_cost` (refits, mean and total
+training seconds, updates, examples, final loss, and share of refits with a flat
+calibration) and `history_sufficiency`. Results on fewer than 1,260 sessions
+(about five years) are flagged `interpretable: false` and should not be read as
+evidence. Build a longer dataset with `research.build_dataset` first. The
+synthetic demo refits in about 0.2 seconds per session.
 
 ## Allocation comparison
 

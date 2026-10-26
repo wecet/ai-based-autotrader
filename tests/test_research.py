@@ -258,3 +258,22 @@ def test_regime_experiment_compares_against_static_strategies():
     from research.__main__ import strategy_factories
     assert list(strategy_factories(ModelRegistry(), 'regime')) == ['momentum_rotation', 'boosted_ranker',
                                                                    'residual_reversion', 'regime_composite']
+
+
+def test_temporal_experiment_reports_cost_and_history_sufficiency():
+    from core.registry import ModelRegistry
+    from research.__main__ import strategy_factories
+    from research.temporal_analysis import history_sufficiency, retraining_cost
+    assert list(strategy_factories(ModelRegistry(), 'temporal')) == ['momentum_rotation', 'boosted_ranker',
+                                                                     'temporal_network']
+    assert history_sufficiency(synthetic_dataset(310).history)['interpretable'] is False
+    def runner(factory, history, settings, config):
+        model = factory()
+        model.cost_log.extend([{'seconds': 1.0, 'updates': 10, 'examples': 50, 'final_loss': .1,
+                                'calibration_slope': 0.0},
+                               {'seconds': 3.0, 'updates': 10, 'examples': 70, 'final_loss': .3,
+                                'calibration_slope': .2}])
+    report = retraining_cost(None, TradingSettings(universe={'AAA': 'G', 'BBB': 'G'}), None, runner=runner)
+    assert report['refits'] == 2
+    assert report['mean_training_seconds'] == 2
+    assert report['flat_calibration_share'] == .5

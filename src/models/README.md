@@ -13,6 +13,7 @@ persistent order journal belong to the shared trading infrastructure.
 | [meta_momentum.py](meta_momentum.py) | Meta-labelled momentum | Momentum rule entries filtered by a logistic classifier of past rule outcomes | Approximately 12 months; 21-session labels |
 | [regime_composite.py](regime_composite.py) | Regime-adaptive composite | Forward-filtered trend/range/stress regimes select momentum or reversion; stress scales exposure down | Daily regime; component horizons |
 | [residual_reversion.py](residual_reversion.py) | Residual mean reversion | Long-only entries on standardized five-session residuals versus SPY and the group benchmark | Up to ten sessions, with explicit exits |
+| [temporal_network.py](temporal_network.py) | Temporal network ranking | Compact NumPy causal TCN on 32-session return/volume sequences with purged return calibration | Five-session forward return |
 | [_template.py](_template.py) | Not selectable | Abstract scaffold for another strategy | Defined by its implementation |
 
 The prediction horizon is not a mandatory holding period. Targets are evaluated
@@ -273,6 +274,15 @@ in `range`, multiplies the total exposure limit by 1 − P(stress), and delegate
 signals to the active component. See
 [strategy research](../../docs/research.md#causal-regime-adaptation).
 
+## Temporal network ranking
+
+[TemporalNetworkModel](temporal_network.py) builds point-in-time sequences with
+`trading.temporal.build_sequences` and trains `TemporalConvNet` under a declared
+`TrainingBudget`. Like boosted ranking, it separates fitting from return
+calibration with a five-date purge, disables allocations when the calibration
+slope is not positive, and records retraining time and update counts. See
+[strategy research](../../docs/research.md#compact-temporal-network).
+
 ## Shared allocation, execution and switching
 
 [allocate_targets](../trading/allocation.py), used by momentum and boosted
@@ -323,7 +333,7 @@ and allocation components instead of duplicating execution rules.
 Relevant checks:
 
 ```sh
-uv run pytest tests/test_cross_sectional.py tests/test_momentum.py tests/test_boosted_ranker.py tests/test_residual_reversion.py tests/test_meta_momentum.py tests/test_regimes.py tests/test_allocation.py
+uv run pytest tests/test_cross_sectional.py tests/test_momentum.py tests/test_boosted_ranker.py tests/test_residual_reversion.py tests/test_meta_momentum.py tests/test_regimes.py tests/test_temporal_network.py tests/test_allocation.py
 uv run python -m research --demo /tmp/strategy-demo.json
 ```
 
