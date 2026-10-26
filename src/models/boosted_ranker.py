@@ -40,12 +40,14 @@ class BoostedRankingModel(RankingModel):
         self.training_end, self.calibration_start = max(train_dates), min(calibration_dates)
         return self
 
-    def candidates(self, current_weights, portfolio_value, limits):
+    def target_signals(self):
         threshold = .0005 + .0005 + self.safety_margin
-        signals = [TargetSignal(row.symbol, row.close, row.sector, percentile, prediction,
-                                1.0 if prediction > threshold and self.return_calibration[1] > 0 else 0.0)
-                   for row, prediction, percentile in self.ranked]
-        return allocate_targets(signals, current_weights, portfolio_value, limits, self.universe)
+        return [TargetSignal(row.symbol, row.close, row.sector, percentile, prediction,
+                             1.0 if prediction > threshold and self.return_calibration[1] > 0 else 0.0)
+                for row, prediction, percentile in self.ranked]
+
+    def candidates(self, current_weights, portfolio_value, limits):
+        return allocate_targets(self.target_signals(), current_weights, portfolio_value, limits, self.universe)
 
 
 MODEL = ModelDefinition(

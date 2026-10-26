@@ -1,5 +1,6 @@
 from dataclasses import replace
 from datetime import date, timedelta
+import json
 
 import pytest
 
@@ -190,3 +191,48 @@ def test_cli_keeps_reserved_final_sessions_out_of_development(tmp_path, monkeypa
         assert all(start == 290 for _, start in observed)
     finally:
         cli.run_backtest = original
+
+
+def test_cli_records_protocol_and_every_trial_including_failures(tmp_path, monkeypatch):
+    from research.__main__ import main
+    import research.__main__ as cli
+    dataset = synthetic_dataset(310)
+    dataset_path = tmp_path / 'dataset.json'
+    dataset_path.write_text(dataset.model_dump_json())
+    original = cli.run_backtest
+    def record(factory, history, settings, config):
+        factory()
+        return {'metrics': {}}
+    cli.run_backtest = record
+    monkeypatch.setenv('RESEARCH_EXPERIMENT', 'allocation')
+    try:
+        assert main([str(dataset_path), str(tmp_path / 'allocation.json')]) == 0
+        output = json.loads((tmp_path / 'allocation.json').read_text())
+        assert output['protocol']['experiment'] == 'allocation'
+        assert output['protocol']['rejection_criteria']
+        assert set(output['results']) == {'momentum_rotation', 'boosted_ranker'}
+        def fail(*args):
+            raise ValueError('Invalid portfolio accounting')
+        cli.run_backtest = fail
+        monkeypatch.setenv('RESEARCH_EXPERIMENT', 'baselines')
+        with pytest.raises(ValueError):
+            main([str(dataset_path), str(tmp_path / 'failed.json')])
+        monkeypatch.setenv('RESEARCH_EXPERIMENT', 'unknown')
+        with pytest.raises(ValueError, match='RESEARCH_EXPERIMENT'):
+            main([str(dataset_path), str(tmp_path / 'unknown.json')])
+    finally:
+        cli.run_backtest = original
+    trials = [json.loads(line) for line in (tmp_path / 'research-trials.jsonl').read_text().splitlines()]
+    assert [(t['experiment'], t['status']) for t in trials] == [('allocation', 'completed'), ('baselines', 'failed')]
+    assert trials[1]['error'] == 'ValueError: Invalid portfolio accounting'
+    assert all(t['dataset_sha256'] for t in trials)
+
+
+def test_reports_tail_and_regime_sensitivity(settings):
+    dataset = synthetic_dataset(310)
+    config = BacktestConfig(initial_cash=1000, warmup_sessions=290, spread_bps=0, slippage_bps=0)
+    report = run_backtest(RoundTrip, dataset.history, settings, config)
+    assert report['metrics']['expected_shortfall_5pct'] <= 0
+    assert set(report['metrics']['regimes']['trend']) <= {'uptrend', 'downtrend'}
+    assert set(report['metrics']['regimes']['volatility']) <= {'high_volatility', 'low_volatility'}
+    assert sum(r['sessions'] for r in report['metrics']['regimes']['trend'].values()) == len(report['snapshots'])
