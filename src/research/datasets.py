@@ -1,5 +1,6 @@
 """Frozen JSON datasets and deterministic fixtures for offline research."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from typing import Literal
 import hashlib
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 from core.types import DailyBar, MarketHistory
 from research.backtest import validate_history
+from research.events import MarketEvents, validate_events
 
 
 class Dataset(BaseModel):
@@ -16,12 +18,17 @@ class Dataset(BaseModel):
     history: MarketHistory
     source: str
     selection_notes: str
+    price_basis: Literal["split_adjusted", "raw"] = "split_adjusted"
+    events: MarketEvents = MarketEvents()
+    ingested_at: datetime | None = None
+    information_notes: str | None = None
 
 
 def load_dataset(path):
     content = Path(path).read_bytes()
     dataset = Dataset.model_validate_json(content)
     validate_history(dataset.history)
+    validate_events(dataset.events, dataset.history, dataset.price_basis)
     return dataset, hashlib.sha256(content).hexdigest()
 
 
