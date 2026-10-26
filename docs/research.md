@@ -98,6 +98,8 @@ from repeated tests on the final interval.
 | `RESEARCH_SPREAD_BPS` | `5` | Per-side spread impact assumption |
 | `RESEARCH_SLIPPAGE_BPS` | `5` | Per-side slippage assumption |
 | `RESEARCH_FEE_BPS` | `0` | Per-side fee assumption |
+| `RESEARCH_EXPERIMENT` | `baselines` | `baselines` compares shipped strategies; `allocation` compares sizing methods |
+| `RESEARCH_TRIAL_LOG` | `research-trials.jsonl` beside the output | Append-only record of every run, including failures |
 
 The CLI uses `TradingSettings` defaults and any exported `TRADER_*` overrides,
 with the dataset's universe. It does not load broker credentials or modify
@@ -110,6 +112,49 @@ exposure, execution costs, fills, daily cash/positions/equity, and abstention
 or rejection events. Annualization uses 252 sessions. Every CLI comparison
 also reruns double spread/slippage and one-session delay on the same evaluation
 dates. Input failures and training abstentions remain visible in the report.
+
+Reports also include 5% expected shortfall, return skewness, and returns grouped
+by regimes known at the prior close: SPY above or below its 200-session average,
+and 20-session SPY volatility above or below its trailing 252-session median.
+Sessions without enough history are labeled `unknown`. Regime labels are
+reporting only and are never passed to a model.
+
+Every report carries the experiment's pre-registered protocol (hypothesis,
+universe, information cutoff, horizon, benchmark and rejection criteria) from
+`research/protocols.py`. Change a protocol in a reviewed commit before tuning,
+not after inspecting results. Each invocation appends a line to the trial log
+with the dataset hash, configuration, mode and status, so failed and repeated
+trials stay visible.
+
+## Allocation comparison
+
+`RESEARCH_EXPERIMENT=allocation` holds momentum and boosted-ranking signals fixed
+and changes only target sizes, using interchangeable functions in
+`trading/allocation.py`:
+
+| Method | Sizing of the selected `top_n` signals |
+| --- | --- |
+| `capped` | Each selected symbol requests the maximum position (boosted ranking's shipped behavior) |
+| `equal` | Equal shares of the remaining total exposure budget |
+| `inverse_volatility` | Shares proportional to 1/σ of 60 trailing daily returns (momentum's shipped behavior) |
+| `hierarchical_risk` | Hierarchical risk parity: single-linkage clustering on correlation distance √((1−ρ)/2), then recursive variance bisection |
+
+Selection, eligibility, exits and buy/sell decisions are delegated unchanged to
+the base model. Every method passes through `allocate_targets`, so retained
+holdings, position, group, total and count limits still apply and unused room
+stays cash; no method adds leverage. Selected symbols without a usable 60-session
+return window receive no target rather than an invented risk estimate.
+
+Each method runs at base and double costs. Reports add the mean summed absolute
+target-weight change between rebalances, the mean change in pairwise holding
+correlations (covariance stability), mean holding correlation, largest group
+weight, and maximum total target. Datasets carry no ETF constituents, so holding
+correlation and group concentration stand in for constituent overlap.
+
+When `top_n × maximum_position` does not exceed `maximum_total_exposure`, as with
+the defaults (5 × 10% vs 50%), every proportional method is capped at the maximum
+position and all methods produce identical targets. Differences only appear when
+the position cap leaves room, for example with more names or a higher cap.
 
 Daily opens approximate executions: they cannot reproduce one-order-per-cycle
 intraday timing, actual broker rejection rates, or live market impact. Results

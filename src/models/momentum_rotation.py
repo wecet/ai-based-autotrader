@@ -41,8 +41,11 @@ class MomentumRotationModel(Model):
             raise ValueError("Momentum requires liquid, aligned histories of at least 253 sessions")
         self.signals, self.universe = signals, dict(universe)
 
+    def target_signals(self):
+        return list(self.signals)
+
     def candidates(self, current_weights, portfolio_value, limits):
-        return allocate_targets(self.signals, current_weights, portfolio_value, limits,
+        return allocate_targets(self.target_signals(), current_weights, portfolio_value, limits,
                                 self.universe, proportional=True)
 
     def decide_to_buy(self, context):

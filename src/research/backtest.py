@@ -71,12 +71,42 @@ def metrics(snapshots, fills, initial_cash):
         "sharpe_zero_cash_rate": float(np.mean(returns) / deviation * math.sqrt(252)) if deviation > 0 else None,
         "maximum_drawdown": float(np.min(equity / peaks - 1)),
         "worst_session_return": float(np.min(returns)),
+        "expected_shortfall_5pct": float(np.mean(returns[returns <= np.quantile(returns, .05)])),
+        "return_skewness": float(np.mean(((returns - np.mean(returns)) / deviation) ** 3)) if deviation > 0 else None,
         "turnover_over_initial_equity": sum(f["notional"] for f in fills) / initial_cash,
         "average_exposure": float(np.mean([s["exposure"] for s in snapshots])),
         "fees": sum(f["fee"] for f in fills),
         "execution_impact": sum(f["impact"] for f in fills),
         "fill_count": len(fills),
     }
+
+
+def regime_sensitivity(snapshots, initial_cash, spy):
+    """Group session returns by regimes known at the prior close.
+
+    Trend compares SPY with its 200-session average; volatility compares 20-session
+    realized volatility with its trailing 252-session median. Labels are reporting
+    only and never reach a model.
+    """
+    closes = {b.date.isoformat(): index for index, b in enumerate(spy)}
+    prices = np.asarray([b.close for b in spy], dtype=float)
+    daily = np.diff(prices) / prices[:-1]
+    equity = [initial_cash, *[s["equity"] for s in snapshots]]
+    groups = {}
+    for previous, snapshot, current in zip(equity, snapshots, equity[1:]):
+        index = closes[snapshot["date"]] - 1
+        trend = volatility = "unknown"
+        if index >= 199:
+            trend = "uptrend" if prices[index] > prices[index - 199:index + 1].mean() else "downtrend"
+        if index >= 272:
+            window = [np.std(daily[end - 20:end], ddof=1) for end in range(index - 251, index + 1)]
+            volatility = "high_volatility" if window[-1] > np.median(window) else "low_volatility"
+        for dimension, label in (("trend", trend), ("volatility", volatility)):
+            groups.setdefault(dimension, {}).setdefault(label, []).append(current / previous - 1)
+    return {dimension: {label: {"sessions": len(values), "mean_session_return": float(np.mean(values)),
+                                "compounded_return": float(np.prod(np.add(values, 1)) - 1)}
+                        for label, values in sorted(labels.items())}
+            for dimension, labels in groups.items()}
 
 
 def run_backtest(model_factory, history, settings, config=BacktestConfig(), *, order_allowed=None):
@@ -185,6 +215,7 @@ def run_backtest(model_factory, history, settings, config=BacktestConfig(), *, o
     result = metrics(snapshots, fills, config.initial_cash)
     result["spy_price_return"] = history.spy[-1].close / history.spy[first].open - 1
     result["excess_price_return"] = result["net_return"] - result["spy_price_return"]
+    result["regimes"] = regime_sensitivity(snapshots, config.initial_cash, history.spy)
     return {"config": asdict(config), "settings": settings.model_dump(), "metrics": result,
             "snapshots": snapshots, "fills": fills, "events": events,
             "limitations": ["Static universe: survivorship bias is not corrected.",
