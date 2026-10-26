@@ -11,6 +11,7 @@ persistent order journal belong to the shared trading infrastructure.
 | [momentum_rotation.py](momentum_rotation.py) | Momentum rotation | Historical trend ranking with inverse-volatility sizing | Approximately 12 months, excluding the latest month |
 | [boosted_ranker.py](boosted_ranker.py) | Boosted return ranking | Nonlinear boosted-tree rank regression with chronological return calibration | Five-session forward return |
 | [meta_momentum.py](meta_momentum.py) | Meta-labelled momentum | Momentum rule entries filtered by a logistic classifier of past rule outcomes | Approximately 12 months; 21-session labels |
+| [regime_composite.py](regime_composite.py) | Regime-adaptive composite | Forward-filtered trend/range/stress regimes select momentum or reversion; stress scales exposure down | Daily regime; component horizons |
 | [residual_reversion.py](residual_reversion.py) | Residual mean reversion | Long-only entries on standardized five-session residuals versus SPY and the group benchmark | Up to ten sessions, with explicit exits |
 | [_template.py](_template.py) | Not selectable | Abstract scaffold for another strategy | Defined by its implementation |
 
@@ -263,6 +264,15 @@ net of a 0.2% round trip, fits the classifier, and vetoes new entries with
 probability below 0.5. Exits and inverse-volatility sizing match momentum. See
 [strategy research](../../docs/research.md#meta-labelled-momentum).
 
+## Regime-adaptive composite
+
+[RegimeCompositeModel](regime_composite.py) fits `trading.regimes.FilteredRegimeModel`
+on `trading.features.regime_features` at every preparation, using only the
+supplied history. It prepares momentum rotation in `trend` and residual reversion
+in `range`, multiplies the total exposure limit by 1 − P(stress), and delegates
+signals to the active component. See
+[strategy research](../../docs/research.md#causal-regime-adaptation).
+
 ## Shared allocation, execution and switching
 
 [allocate_targets](../trading/allocation.py), used by momentum and boosted
@@ -313,7 +323,7 @@ and allocation components instead of duplicating execution rules.
 Relevant checks:
 
 ```sh
-uv run pytest tests/test_cross_sectional.py tests/test_momentum.py tests/test_boosted_ranker.py tests/test_residual_reversion.py tests/test_meta_momentum.py tests/test_allocation.py
+uv run pytest tests/test_cross_sectional.py tests/test_momentum.py tests/test_boosted_ranker.py tests/test_residual_reversion.py tests/test_meta_momentum.py tests/test_regimes.py tests/test_allocation.py
 uv run python -m research --demo /tmp/strategy-demo.json
 ```
 

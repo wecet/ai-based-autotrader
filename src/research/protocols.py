@@ -58,6 +58,17 @@ PROTOCOLS = {
                             "Missed upside exceeds avoided losses.",
                             "Net return or drawdown is not better than unfiltered momentum after double costs.",
                             "Brier score is no better than predicting the base rate.")),
+    "regime": ResearchProtocol(
+        hypothesis="Causal market regimes improve selection between momentum, residual reversion and reduced "
+                   "exposure compared with any static strategy.",
+        universe=COMMON_UNIVERSE, information_cutoff=COMMON_CUTOFF,
+        horizon="Daily regime probabilities forward-filtered from trailing SPY trend, volatility, breadth and "
+                "correlation; three-state mixture refitted at each preparation on past rows only.",
+        benchmark="Static momentum rotation, residual reversion and boosted ranking on the same sessions.",
+        rejection_criteria=("Net return after double costs does not beat the best static strategy.",
+                            "Drawdown is not lower than momentum rotation's.",
+                            "Results reverse between switching margins 0 and 0.2.",
+                            "Regimes switch on more than a quarter of sessions.")),
 }
 
 

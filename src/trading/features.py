@@ -295,3 +295,33 @@ def next_open_outcome(bars: Sequence[DailyBar], day: int, horizon: int, round_tr
     if day + 1 + horizon >= len(bars):
         return None
     return bars[day + 1 + horizon].open / bars[day + 1].open - 1 - round_trip_cost
+
+
+REGIME_FEATURE_NAMES = ("spy_trend_60d", "spy_volatility_20d", "breadth_above_ma50", "average_correlation_60d")
+
+
+def regime_features(spy_bars: Sequence[DailyBar], stock_bars: Mapping[str, Sequence[DailyBar]]) -> np.ndarray:
+    """Market-state features per session from trailing data only; NaN before 200 sessions.
+
+    Breadth is the fraction of aligned stocks above their 50-session average and
+    correlation the mean pairwise correlation of their last 60 daily returns.
+    """
+    spy = np.asarray([b.close for b in spy_bars], dtype=float)
+    dates = [b.date for b in spy_bars]
+    aligned = [np.asarray([b.close for b in bars], dtype=float) for _, bars in sorted(stock_bars.items())
+               if [b.date for b in bars] == dates]
+    rows = np.full((len(spy), len(REGIME_FEATURE_NAMES)), np.nan)
+    if len(spy) < 201 or len(aligned) < 2:
+        return rows
+    closes = np.column_stack(aligned)
+    returns = np.diff(closes, axis=0) / closes[:-1]
+    spy_returns = np.diff(spy) / spy[:-1]
+    for t in range(200, len(spy)):
+        with np.errstate(divide="ignore", invalid="ignore"):
+            correlation = np.corrcoef(returns[t - 60:t], rowvar=False)
+        upper = correlation[np.triu_indices(len(aligned), 1)]
+        rows[t] = (spy[t] / spy[t - 60] - 1,
+                   np.std(spy_returns[t - 20:t], ddof=1) * np.sqrt(252.0),
+                   np.mean(closes[t] > closes[t - 49:t + 1].mean(axis=0)),
+                   np.nanmean(upper) if np.isfinite(upper).any() else np.nan)
+    return rows
