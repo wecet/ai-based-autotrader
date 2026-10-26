@@ -66,7 +66,11 @@ def build_dataset(bars_client, actions_client, universe, start, end, *, feed, no
         types=[CorporateActionsType.FORWARD_SPLIT, CorporateActionsType.REVERSE_SPLIT,
                CorporateActionsType.CASH_DIVIDEND]))
     kinds = {symbol: note.kind for symbol, note in notes.items()}
-    events = MarketEvents(corporate_actions=corporate_actions(actions.data, kinds),
+    mapped = corporate_actions(actions.data, kinds)
+    # Provider records occasionally date cash payment before the ex-date; credit those on the ex-date.
+    repaired = [a for a in mapped if a.kind != "split" and a.pay_date is not None and a.pay_date < a.ex_date]
+    mapped = [a.model_copy(update={"pay_date": a.ex_date}) if a in repaired else a for a in mapped]
+    events = MarketEvents(corporate_actions=mapped,
                           membership={s: [MembershipInterval(**i) for i in intervals]
                                       for s, intervals in (membership or {}).items()},
                           instruments=notes)
@@ -80,7 +84,8 @@ def build_dataset(bars_client, actions_client, universe, start, end, *, feed, no
                         "when bars stop more than five days before the last SPY session.",
         price_basis="raw", events=events, ingested_at=now,
         information_notes="Bars are timestamped by session; actions are usable from their ex-date. The provider "
-                          "supplies process dates, not announcement times.")
+                          "supplies process dates, not announcement times. "
+                          f"{len(repaired)} cash events dated payment before the ex-date and are paid on the ex-date.")
 
 
 def main(argv=None):
