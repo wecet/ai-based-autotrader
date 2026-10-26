@@ -284,3 +284,30 @@ def test_ensemble_experiment_compares_against_each_member():
     from research.__main__ import strategy_factories
     assert list(strategy_factories(ModelRegistry(), 'ensemble')) == ['momentum_rotation', 'boosted_ranker',
                                                                      'residual_reversion', 'ensemble']
+
+
+def test_lookback_limits_snapshots_to_recent_sessions():
+    from research.backtest import history_before
+    history = synthetic_dataset(40).history
+    cutoff = history.spy[30].date
+    recent = history_before(history, cutoff, lookback=10)
+    assert [b.date for b in recent.spy] == [b.date for b in history.spy[20:30]]
+    assert all(len(bars) == 10 for bars in [*recent.stocks.values(), *recent.sectors.values()])
+    assert history_before(history, cutoff).spy == history.spy[:30]
+    assert history_before(history, history.spy[0].date, lookback=10).spy == []
+    with pytest.raises(ValueError):
+        BacktestConfig(lookback_sessions=0)
+
+
+def test_per_model_cadence_overrides_only_named_strategies():
+    from research.__main__ import parse_cadences, with_cadences
+    seen = []
+    run = with_cadences(lambda f, h, s, c, **o: seen.append((s.model_id, c.rebalance_sessions, o)), {'slow': 21})
+    settings = TradingSettings(universe={'AAA': 'G', 'BBB': 'G'})
+    run(None, None, settings.model_copy(update={'model_id': 'slow'}), BacktestConfig(), market_events='x')
+    run(None, None, settings.model_copy(update={'model_id': 'fast'}), BacktestConfig())
+    assert seen == [('slow', 21, {'market_events': 'x'}), ('fast', 1, {})]
+    assert parse_cadences(None) == {}
+    for bad in ('[1]', '{"a": 0}', '{"a": 1.5}'):
+        with pytest.raises(ValueError):
+            parse_cadences(bad)

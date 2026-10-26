@@ -195,15 +195,23 @@ def residual_zscores(closes: Sequence[float], market_closes: Sequence[float], gr
     returns = np.diff(closes) / closes[:-1]
     factors = np.column_stack((np.ones(len(returns)), np.diff(market) / market[:-1], np.diff(group) / group[:-1]))
     scores = np.full(len(closes), np.nan)
-    for t in range(lookback + shock, len(closes)):
-        fit = slice(t - shock - lookback, t - shock)
-        coefficients = np.linalg.lstsq(factors[fit], returns[fit], rcond=None)[0]
-        residuals = returns[fit] - factors[fit] @ coefficients
-        sigma = float(np.std(residuals, ddof=factors.shape[1]))
-        if sigma > 0:
-            window = slice(t - shock, t)
-            residual = returns[window] - factors[window, 1:] @ coefficients[1:]
-            scores[t] = residual.sum() / (sigma * np.sqrt(shock))
+    count = len(closes) - lookback - shock
+    if count <= 0:
+        return scores
+    from numpy.lib.stride_tricks import sliding_window_view
+    # Row j fits sessions [j, j + lookback) and scores date t = j + lookback + shock.
+    x = sliding_window_view(factors, lookback, axis=0)[:count].transpose(0, 2, 1)
+    y = sliding_window_view(returns, lookback)[:count]
+    # The pseudo-inverse gives lstsq's minimum-norm solution when SPY and group coincide.
+    coefficients = np.einsum("nij,nj->ni", np.linalg.pinv(np.einsum("nli,nlj->nij", x, x)),
+                             np.einsum("nli,nl->ni", x, y))
+    residuals = y - np.einsum("nli,ni->nl", x, coefficients)
+    sigma = np.std(residuals, axis=1, ddof=factors.shape[1])
+    shock_x = sliding_window_view(factors[lookback:], shock, axis=0)[:count].transpose(0, 2, 1)
+    shock_y = sliding_window_view(returns[lookback:], shock)[:count]
+    residual = (shock_y - np.einsum("nli,ni->nl", shock_x[:, :, 1:], coefficients[:, 1:])).sum(axis=1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        scores[lookback + shock:] = np.where(sigma > 0, residual / (sigma * np.sqrt(shock)), np.nan)
     return scores
 
 
