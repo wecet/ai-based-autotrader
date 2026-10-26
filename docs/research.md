@@ -1,6 +1,6 @@
 # Strategy research and evaluation
 
-The dashboard discovers seven daily, long-only strategies. Only one is active;
+The dashboard discovers eight daily, long-only strategies. Only one is active;
 installing a strategy does not select it or change saved risk settings.
 
 | Model ID | Method | Interpretation |
@@ -11,6 +11,7 @@ installing a strategy does not select it or change saved risk settings.
 | `meta_momentum` | Momentum rotation entries accepted only when a classifier, trained on past rule outcomes, predicts a net gain | Classifier probability gates entries; momentum score and sizing are unchanged |
 | `regime_composite` | Causal trend/range/stress regimes choose momentum or residual reversion and scale exposure | Filtered regime probabilities; the active component's score |
 | `temporal_network` | Compact causal temporal convolutional network on 32-session return/volume sequences, with purged return calibration | Estimated five-session return, used only when its calibrated edge exceeds costs |
+| `ensemble` | Fixed equal-weight average of momentum, boosted ranking and residual reversion targets | One aggregate target set; members keep shadow targets for attribution |
 | `residual_reversion` | Long-only entries on unusually weak five-session residuals versus SPY and the group benchmark | Standardized residual score, not a return forecast |
 
 ## Model boundaries
@@ -154,7 +155,7 @@ from repeated tests on the final interval.
 | `RESEARCH_SPREAD_BPS` | `5` | Per-side spread impact assumption |
 | `RESEARCH_SLIPPAGE_BPS` | `5` | Per-side slippage assumption |
 | `RESEARCH_FEE_BPS` | `0` | Per-side fee assumption |
-| `RESEARCH_EXPERIMENT` | `baselines` | `baselines`, `allocation` (sizing methods), `reversion` (residual reversion variants), `meta_momentum`, `regime` or `temporal` |
+| `RESEARCH_EXPERIMENT` | `baselines` | `baselines`, `allocation` (sizing methods), `reversion` (residual reversion variants), `meta_momentum`, `regime`, `temporal` or `ensemble` |
 | `RESEARCH_TRIAL_LOG` | `research-trials.jsonl` beside the output | Append-only record of every run, including failures |
 
 The CLI uses `TradingSettings` defaults and any exported `TRADER_*` overrides,
@@ -302,6 +303,33 @@ calibration) and `history_sufficiency`. Results on fewer than 1,260 sessions
 evidence. Build a longer dataset with `research.build_dataset` first. The
 synthetic demo refits in about 0.3 seconds per session.
 
+## Static ensemble and shadow comparison
+
+`models/ensemble.py` prepares momentum rotation, boosted ranking and residual
+reversion, in that fixed order, on the same snapshot at each preparation. This
+is the scheduling policy. Each member computes its own targets with the real
+account holdings and configured limits, then `combine_targets` takes the weighted
+sum with equal static weights set in code. Learned weights are deliberately out
+of scope until static results are final, so validation results are never reused
+to choose weights. A member without a view on a held symbol contributes that
+holding's current weight. A convex combination of limit-respecting targets also
+respects position, group and total limits. Only the `top_n` largest aggregate
+targets are kept; the rest become exits.
+
+A member that cannot prepare abstains, and its share stays in cash rather than
+being renormalized. Only the aggregate `TradeCandidate` list reaches execution,
+so the executor's order IDs, deduplication, daily budget and risk checks are
+unchanged. Members never submit orders. Each member's own targets are kept as
+`shadow_targets` and logged.
+
+`RESEARCH_EXPERIMENT=ensemble` compares the ensemble with each member alone,
+including cost and delay stress, and adds `shadow`. That holds a per-member
+attribution of close-to-close holding P/L by each member's share of the prior
+aggregate target. Holdings without a target share are `unattributed`, and the
+rest of the equity change (open fills, costs, distributions) is
+`execution_and_timing`; the parts sum to the total. It also reports each member's
+mean target divergence from the traded aggregate and abstention counts.
+
 ## Allocation comparison
 
 `RESEARCH_EXPERIMENT=allocation` holds momentum and boosted-ranking signals fixed
@@ -341,7 +369,8 @@ prevent treating a successful synthetic run as investment evidence.
 
 ## Follow-up research
 
-The next stages are tracked in GitHub:
+The next stages are tracked in GitHub; each now has an offline implementation
+and experiment described above, awaiting evaluation on a long frozen dataset:
 
 | Issue | Scope |
 | --- | --- |

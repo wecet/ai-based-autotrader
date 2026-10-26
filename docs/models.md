@@ -10,7 +10,8 @@ The shipped strategies are `cross_sectional` (ridge baseline),
 (nonlinear ranks with chronological return calibration), `meta_momentum`
 (momentum entries filtered by a classifier of past rule outcomes),
 `regime_composite` (causal regimes selecting momentum or reversion),
-`temporal_network` (compact causal convolutional network on sequences), and
+`temporal_network` (compact causal convolutional network on sequences),
+`ensemble` (fixed equal-weight combination of three members), and
 `residual_reversion` (long-only recovery from unusual residual weakness). See
 [strategy research](research.md) for their methods and validation.
 

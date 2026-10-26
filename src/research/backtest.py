@@ -178,7 +178,8 @@ def run_backtest(model_factory, history, settings, config=BacktestConfig(), *, o
             # histories contain exactly the benchmark's completed sessions.
             dates = [b.date for b in snapshot.spy]
             snapshot = MarketHistory({s: bars for s, bars in snapshot.stocks.items()
-                                      if s in members and [b.date for b in snapshot.sectors.get(members[s], [])] == dates},
+                                      if s in members
+                                      and [b.date for b in snapshot.sectors.get(members[s], [])] == dates},
                                      snapshot.spy, snapshot.sectors)
             try:
                 model.prepare(snapshot, members)

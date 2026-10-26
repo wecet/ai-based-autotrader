@@ -79,6 +79,17 @@ PROTOCOLS = {
                             "Calibration slope is flat in more than half of refits.",
                             "The dataset has fewer than 1,260 sessions; results are not interpreted.",
                             "Retraining cost is not justified by any improvement.")),
+    "ensemble": ResearchProtocol(
+        hypothesis="A fixed equal-weight combination of momentum, boosted ranking and residual reversion "
+                   "improves portfolio behavior over the best single member.",
+        universe=COMMON_UNIVERSE, information_cutoff=COMMON_CUTOFF,
+        horizon="Members prepared in a fixed order on the same snapshot each session; equal static weights "
+                "set in code before evaluation; learned weights are out of scope until static results are final.",
+        benchmark="Each member alone on the same sessions; the best single member is the baseline to beat.",
+        rejection_criteria=("Net return after double costs is below the best member's.",
+                            "Drawdown is not lower than every member's.",
+                            "Attribution shows one member supplies nearly all profit.",
+                            "Weights or members are changed after inspecting development or final results.")),
 }
 
 
