@@ -36,6 +36,17 @@ PROTOCOLS = {
         rejection_criteria=("No method improves net return and drawdown together versus the shipped allocation.",
                             "Any improvement disappears under double costs.",
                             "Weights are unstable: mean rebalance weight change exceeds the shipped method's.")),
+    "reversion": ResearchProtocol(
+        hypothesis="Unusually weak five-session residual moves versus SPY and the group benchmark recover "
+                   "over the following sessions, net of costs, without a short leg.",
+        universe=COMMON_UNIVERSE, information_cutoff=COMMON_CUTOFF,
+        horizon="Entry at a standardized residual of -2 or lower; exit at -0.5, after ten sessions, or on "
+                "missing data. The breakdown filter labels five-session outcomes against a 0.2% round trip.",
+        benchmark="SPY price return, momentum rotation and boosted ranking on the same sessions.",
+        rejection_criteria=("Net return after double costs does not exceed momentum or boosted ranking.",
+                            "Gains depend on the one-session-delay-free case only.",
+                            "The filtered variant does not improve net return or drawdown over the "
+                            "unfiltered baseline after costs.")),
 }
 
 

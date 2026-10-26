@@ -236,3 +236,11 @@ def test_reports_tail_and_regime_sensitivity(settings):
     assert set(report['metrics']['regimes']['trend']) <= {'uptrend', 'downtrend'}
     assert set(report['metrics']['regimes']['volatility']) <= {'high_volatility', 'low_volatility'}
     assert sum(r['sessions'] for r in report['metrics']['regimes']['trend'].values()) == len(report['snapshots'])
+
+
+def test_reversion_experiment_compares_both_variants_with_baselines():
+    from core.registry import ModelRegistry
+    from research.__main__ import strategy_factories
+    factories = strategy_factories(ModelRegistry(), 'reversion')
+    assert list(factories) == ['momentum_rotation', 'boosted_ranker', 'residual_reversion',
+                               'residual_reversion_filtered']
