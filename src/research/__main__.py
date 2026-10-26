@@ -18,10 +18,18 @@ BASELINES = ("cross_sectional", "momentum_rotation", "boosted_ranker")
 ALLOCATION_SIGNALS = ("momentum_rotation", "boosted_ranker")
 
 
-def compare_baselines(registry, history, settings, config):
+def strategy_factories(registry, experiment):
+    if experiment == "reversion":
+        from models.residual_reversion import FilteredResidualReversionModel
+        names = ("momentum_rotation", "boosted_ranker", "residual_reversion")
+        return {**{name: registry.require(name).model_type for name in names},
+                "residual_reversion_filtered": FilteredResidualReversionModel}
+    return {name: registry.require(name).model_type for name in BASELINES}
+
+
+def compare_strategies(factories, history, settings, config):
     results = {}
-    for name in BASELINES:
-        factory = registry.require(name).model_type
+    for name, factory in factories.items():
         strategy_settings = settings.model_copy(update={"model_id": name})
         result = run_backtest(factory, history, strategy_settings, config)
         cost_stress = run_backtest(factory, history, strategy_settings,
@@ -76,7 +84,7 @@ def main(argv=None):
             model_types = {name: registry.require(name).model_type for name in ALLOCATION_SIGNALS}
             results = compare_allocations(model_types, evaluation_history, settings, config, runner=run_backtest)
         else:
-            results = compare_baselines(registry, evaluation_history, settings, config)
+            results = compare_strategies(strategy_factories(registry, experiment), evaluation_history, settings, config)
     except Exception as error:
         append_trials(trial_log, {**trial, "status": "failed", "error": type(error).__name__ + ": " + str(error)})
         raise

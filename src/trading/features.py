@@ -180,3 +180,52 @@ def chronological_split(
     )
 
 
+def residual_zscores(closes: Sequence[float], market_closes: Sequence[float], group_closes: Sequence[float],
+                     *, lookback: int = 60, shock: int = 5) -> np.ndarray:
+    """Standardized cumulative residual return over the latest ``shock`` sessions, per date.
+
+    For each date t, regress daily returns on market and group returns over the
+    ``lookback`` sessions before the shock window, then sum the shock window's
+    residuals (excluding the intercept) and divide by sigma * sqrt(shock). Only
+    closes up to t are used. Dates without enough history are NaN.
+    """
+    closes, market, group = (np.asarray(values, dtype=float) for values in (closes, market_closes, group_closes))
+    if not len(closes) == len(market) == len(group):
+        raise ValueError("Residual inputs must be aligned")
+    returns = np.diff(closes) / closes[:-1]
+    factors = np.column_stack((np.ones(len(returns)), np.diff(market) / market[:-1], np.diff(group) / group[:-1]))
+    scores = np.full(len(closes), np.nan)
+    for t in range(lookback + shock, len(closes)):
+        fit = slice(t - shock - lookback, t - shock)
+        coefficients = np.linalg.lstsq(factors[fit], returns[fit], rcond=None)[0]
+        residuals = returns[fit] - factors[fit] @ coefficients
+        sigma = float(np.std(residuals, ddof=factors.shape[1]))
+        if sigma > 0:
+            window = slice(t - shock, t)
+            residual = returns[window] - factors[window, 1:] @ coefficients[1:]
+            scores[t] = residual.sum() / (sigma * np.sqrt(shock))
+    return scores
+
+
+def reversion_episode_age(scores: Sequence[float], *, entry: float, exit: float,
+                          maximum_sessions: int) -> int | None:
+    """Sessions since an open reversion episode began, or None when flat.
+
+    An episode opens when the score falls to ``entry`` and closes once it recovers
+    to ``exit``, exceeds the holding limit, or becomes unavailable. A new episode
+    requires the score to rise above ``entry`` first, so a persistent decline
+    cannot re-qualify immediately after a forced exit.
+    """
+    age, armed = None, True
+    for score in scores:
+        if age is not None:
+            age += 1
+            if not np.isfinite(score) or score >= exit or age > maximum_sessions:
+                age, armed = None, False
+        if not np.isfinite(score):
+            continue
+        if score > entry:
+            armed = True
+        elif age is None and armed:
+            age, armed = 0, False
+    return age

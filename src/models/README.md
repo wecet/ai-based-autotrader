@@ -10,6 +10,7 @@ persistent order journal belong to the shared trading infrastructure.
 | [cross_sectional.py](cross_sectional.py) | Cross-sectional ranking | Linear ridge regression on return ranks | Five-session forward return |
 | [momentum_rotation.py](momentum_rotation.py) | Momentum rotation | Historical trend ranking with inverse-volatility sizing | Approximately 12 months, excluding the latest month |
 | [boosted_ranker.py](boosted_ranker.py) | Boosted return ranking | Nonlinear boosted-tree rank regression with chronological return calibration | Five-session forward return |
+| [residual_reversion.py](residual_reversion.py) | Residual mean reversion | Long-only entries on standardized five-session residuals versus SPY and the group benchmark | Up to ten sessions, with explicit exits |
 | [_template.py](_template.py) | Not selectable | Abstract scaffold for another strategy | Defined by its implementation |
 
 The prediction horizon is not a mandatory holding period. Targets are evaluated
@@ -235,6 +236,22 @@ its positive slope, usable existing holdings receive zero targets as well;
 missing-history holdings remain retained. Buy/sell approval then follows the
 same estimated-edge and minimum-notional rules as the ridge baseline.
 
+## Residual mean reversion: long-only recovery
+
+[ResidualReversionModel](residual_reversion.py) scores each symbol with
+`trading.features.residual_zscores`: betas to SPY and the group benchmark are
+fitted on 60 sessions before the latest five, and the five-session residual sum
+is standardized. Scores of -2 or lower open an episode; it closes at -0.5, after
+ten sessions, or when the score is unavailable, and must re-arm above -2 before
+another entry. Episodes are rederived from history on each preparation. Open
+episodes receive inverse-volatility weights through `allocate_targets`;
+`predicted_return` is `None`, as for momentum.
+
+`FilteredResidualReversionModel` overrides `reject_entries` with a logistic
+breakdown classifier trained only on completed past outcomes. Vetoes apply to new
+entries, never to existing holdings. It is a research variant with no `MODEL`
+export. See [strategy research](../../docs/research.md#residual-mean-reversion).
+
 ## Shared allocation, execution and switching
 
 [allocate_targets](../trading/allocation.py), used by momentum and boosted
@@ -285,7 +302,7 @@ and allocation components instead of duplicating execution rules.
 Relevant checks:
 
 ```sh
-uv run pytest tests/test_cross_sectional.py tests/test_momentum.py tests/test_boosted_ranker.py tests/test_allocation.py
+uv run pytest tests/test_cross_sectional.py tests/test_momentum.py tests/test_boosted_ranker.py tests/test_residual_reversion.py tests/test_allocation.py
 uv run python -m research --demo /tmp/strategy-demo.json
 ```
 

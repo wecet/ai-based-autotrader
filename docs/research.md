@@ -1,6 +1,6 @@
 # Strategy research and evaluation
 
-The dashboard discovers three daily, long-only strategies. Only one is active;
+The dashboard discovers four daily, long-only strategies. Only one is active;
 installing a strategy does not select it or change saved risk settings.
 
 | Model ID | Method | Interpretation |
@@ -8,6 +8,7 @@ installing a strategy does not select it or change saved risk settings.
 | `cross_sectional` | Original ridge regression on within-date five-session return ranks | Linear baseline, with the existing in-sample return calibration preserved |
 | `momentum_rotation` | Positive 12-minus-1-month momentum above a 200-session moving average; inverse-volatility targets | Historical momentum score, not a return forecast |
 | `boosted_ranker` | Histogram gradient-boosted return ranks with a later return-calibration window | Estimated five-session return, used only when its calibrated edge exceeds costs |
+| `residual_reversion` | Long-only entries on unusually weak five-session residuals versus SPY and the group benchmark | Standardized residual score, not a return forecast |
 
 ## Model boundaries
 
@@ -98,7 +99,7 @@ from repeated tests on the final interval.
 | `RESEARCH_SPREAD_BPS` | `5` | Per-side spread impact assumption |
 | `RESEARCH_SLIPPAGE_BPS` | `5` | Per-side slippage assumption |
 | `RESEARCH_FEE_BPS` | `0` | Per-side fee assumption |
-| `RESEARCH_EXPERIMENT` | `baselines` | `baselines` compares shipped strategies; `allocation` compares sizing methods |
+| `RESEARCH_EXPERIMENT` | `baselines` | `baselines`, `allocation` (sizing methods) or `reversion` (residual reversion variants) |
 | `RESEARCH_TRIAL_LOG` | `research-trials.jsonl` beside the output | Append-only record of every run, including failures |
 
 The CLI uses `TradingSettings` defaults and any exported `TRADER_*` overrides,
@@ -125,6 +126,38 @@ universe, information cutoff, horizon, benchmark and rejection criteria) from
 not after inspecting results. Each invocation appends a line to the trial log
 with the dataset hash, configuration, mode and status, so failed and repeated
 trials stay visible.
+
+## Residual mean reversion
+
+`trading/features.py` provides `residual_zscores`. For each date it regresses
+daily stock returns on SPY and group-benchmark returns over the 60 sessions
+before the latest five, then divides the five-session residual sum (excluding the
+intercept) by the fit's residual standard deviation times √5. Only closes up to
+that date are used, so a market- or group-wide selloff is not a signal.
+
+`models/residual_reversion.py` enters when the score is -2 or lower and exits when
+it recovers to -0.5, after ten sessions, or when the score is unavailable.
+`reversion_episode_age` derives the episode from the score history, so a freshly
+prepared model reaches the same decision without stored state. After an exit the
+score must rise above -2 before a new entry, so a persistent decline cannot
+re-qualify. Selected entries are inverse-volatility sized through
+`allocate_targets`; the same price and liquidity filters as momentum apply. There
+is no short leg.
+
+`FilteredResidualReversionModel` adds a logistic breakdown classifier, standardized
+inside each fit. Its examples are past entry signals at least 200 sessions into
+the history, using the 16 shared features plus the score. The label is 1 when the
+following five-session close-to-close return is below a 0.2% round trip. Only
+outcomes completed by the latest bar are used. Entries with breakdown probability
+above 0.5 are vetoed. The veto never applies to existing holdings, which follow
+the base exit rules. With fewer than 40 examples or only one outcome class, the
+filter vetoes all new entries rather than guessing. It needs 206 sessions. The
+filtered variant is research-only and not in the dashboard catalog.
+
+`RESEARCH_EXPERIMENT=reversion` compares the baseline and filtered variants with
+momentum and boosted ranking, including double-cost and one-session-delay stress
+runs. On the synthetic demo the filter has too few signals to fit and makes no
+trades, as designed.
 
 ## Allocation comparison
 
