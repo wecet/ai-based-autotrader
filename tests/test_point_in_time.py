@@ -135,7 +135,7 @@ def test_dataset_validation_rejects_double_adjustment_and_unknown_symbols(tmp_pa
             (MarketEvents(corporate_actions=[action('split', 1, 2.0)]), 'split_adjusted', 'raw prices'),
             (MarketEvents(corporate_actions=[CorporateAction(symbol='ZZZ', kind='dividend', ex_date=DAY, value=1)]),
              'raw', 'unknown symbol'),
-            (MarketEvents(corporate_actions=[action('dividend', 1, 1.0, pay_date=DAY)]), 'raw', 'Payment date')]:
+            (MarketEvents(corporate_actions=[action('dividend', 1, 1.0, pay_date=DAY)]), 'raw', 'Cash payment date')]:
         path.write_text(Dataset(**base, events=events, price_basis=basis).model_dump_json())
         with pytest.raises(ValueError, match=message):
             load_dataset(path)
@@ -180,7 +180,9 @@ def test_builder_freezes_raw_bars_actions_and_inferred_delistings():
     reverse = SimpleNamespace(symbol='GONE', new_rate=1, old_rate=10, ex_date=days[1], payable_date=None,
                               process_date=days[1])
     cash = SimpleNamespace(symbol='GLD', rate=.5, ex_date=days[6], payable_date=days[8], process_date=days[6])
-    actions = {'forward_splits': [split], 'reverse_splits': [reverse], 'cash_dividends': [cash],
+    early = SimpleNamespace(symbol='AAA', rate=.1, ex_date=days[7], payable_date=days[2], process_date=days[2])
+    split.payable_date = days[4]
+    actions = {'forward_splits': [split], 'reverse_splits': [reverse], 'cash_dividends': [cash, early],
                'spin_offs': [object()]}
     bars_client, actions_client = BarsClient(data), ActionsClient(actions)
     now = datetime.datetime.combine(days[-1], datetime.time(15), datetime.timezone.utc)
@@ -193,7 +195,10 @@ def test_builder_freezes_raw_bars_actions_and_inferred_delistings():
     assert dataset.price_basis == 'raw' and dataset.ingested_at == now
     assert dataset.history.spy[-1].date == days[-2]
     kinds = [(a.symbol, a.kind, a.value) for a in dataset.events.corporate_actions]
-    assert kinds == [('GONE', 'split', .1), ('AAA', 'split', 4), ('GLD', 'distribution', .5)]
+    assert kinds == [('GONE', 'split', .1), ('AAA', 'split', 4), ('GLD', 'distribution', .5), ('AAA', 'dividend', .1)]
+    assert dataset.events.corporate_actions[-1].pay_date == days[7]
+    assert dataset.events.corporate_actions[1].pay_date == days[4]
+    assert '1 cash events' in dataset.information_notes
     gone = dataset.events.instruments['GONE']
     assert gone.delisted_on == days[3] and gone.delisting_inferred
     assert dataset.events.instruments['GLD'].kind == 'commodity_fund'
