@@ -144,3 +144,26 @@ def test_fitted_filter_rejects_high_breakdown_probability():
 
 def test_reversion_model_is_discoverable():
     assert ModelRegistry().require('residual_reversion').model_type is ResidualReversionModel
+
+
+def reference_zscores(closes, market, group, lookback=60, shock=5):
+    returns = np.diff(closes) / closes[:-1]
+    factors = np.column_stack((np.ones(len(returns)), np.diff(market) / market[:-1], np.diff(group) / group[:-1]))
+    scores = np.full(len(closes), np.nan)
+    for t in range(lookback + shock, len(closes)):
+        fit = slice(t - shock - lookback, t - shock)
+        coefficients = np.linalg.lstsq(factors[fit], returns[fit], rcond=None)[0]
+        sigma = np.std(returns[fit] - factors[fit] @ coefficients, ddof=3)
+        window = slice(t - shock, t)
+        scores[t] = (returns[window] - factors[window, 1:] @ coefficients[1:]).sum() / (sigma * np.sqrt(shock))
+    return scores
+
+
+@pytest.mark.parametrize('collinear', [False, True])
+def test_vectorized_residuals_match_per_date_regressions(collinear):
+    market, group, stock = factor_paths(200)
+    group_path = series(market) if collinear else series(group)
+    expected = reference_zscores(series(stock), series(market), group_path)
+    np.testing.assert_allclose(residual_zscores(series(stock), series(market), group_path), expected,
+                               rtol=1e-7, atol=1e-9)
+    assert np.isnan(residual_zscores(series(stock[:50]), series(market[:50]), series(group[:50]))).all()

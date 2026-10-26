@@ -1,4 +1,5 @@
 """Expanding walk-forward evaluation with next-session-open execution proxies."""
+import bisect
 from dataclasses import asdict, dataclass
 import math
 
@@ -18,6 +19,7 @@ class BacktestConfig:
     slippage_bps: float = 5.0
     fee_bps: float = 0.0
     volume_participation: float = .01
+    lookback_sessions: int | None = None
 
     def __post_init__(self):
         if not math.isfinite(self.initial_cash) or self.initial_cash <= 0:
@@ -31,6 +33,9 @@ class BacktestConfig:
             raise ValueError("Costs must be finite, non-negative and below 100%")
         if not 0 < self.volume_participation <= 1:
             raise ValueError("Volume participation must be in (0, 1]")
+        if self.lookback_sessions is not None and (type(self.lookback_sessions) is not int
+                                                   or self.lookback_sessions < 1):
+            raise ValueError("Lookback must be a positive integer number of sessions")
 
 
 def validate_history(history):
@@ -48,9 +53,18 @@ def validate_history(history):
                 raise ValueError("OHLC prices are inconsistent")
 
 
-def history_before(history, day):
+def history_before(history, day, lookback=None):
+    """Bars strictly before ``day``, optionally only the latest ``lookback`` SPY sessions.
+
+    Histories are validated as sorted, so binary search replaces linear filtering.
+    """
+    end = bisect.bisect_left(history.spy, day, key=lambda b: b.date)
+    first = history.spy[max(0, end - lookback)].date if lookback and end else None
+
     def past(bars):
-        return [b for b in bars if b.date < day]
+        stop = bisect.bisect_left(bars, day, key=lambda b: b.date)
+        start = bisect.bisect_left(bars, first, key=lambda b: b.date) if first else 0
+        return bars[start:stop]
     spy = past(history.spy)
     dates = [b.date for b in spy]
     sectors = {symbol: past(bars) for symbol, bars in history.sectors.items()}
@@ -170,7 +184,7 @@ def run_backtest(model_factory, history, settings, config=BacktestConfig(), *, o
         if (index - first) % config.rebalance_sessions == 0:
             model = model_factory()
             model.configure(settings)
-            snapshot = history_before(history, signal_day)
+            snapshot = history_before(history, signal_day, config.lookback_sessions)
             members = {s: g for s, g in universe.items() if market_events.member(s, signal_day)}
             if point_in_time and snapshot.spy:
                 snapshot = research_history(snapshot, market_events, snapshot.spy[-1].date)
@@ -215,8 +229,9 @@ def run_backtest(model_factory, history, settings, config=BacktestConfig(), *, o
                     notional = min(notional, settings.maximum_order_notional)
                 # Use previous completed volume, never the future session's
                 # volume, for the participation cap available at the open.
-                prior = [b for b in history.stocks[candidate.symbol] if b.date < day]
-                capacity = prior[-1].volume * config.volume_participation if prior else 0
+                bars = history.stocks[candidate.symbol]
+                prior = bisect.bisect_left(bars, day, key=lambda b: b.date)
+                capacity = bars[prior - 1].volume * config.volume_participation if prior else 0
                 quantity = min(notional / price, capacity)
                 quantity = min(quantity, cash / (price * (1 + fee_rate)) if buy else positions.get(candidate.symbol, 0))
                 notional = math.floor(quantity * price * 100) / 100

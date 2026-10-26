@@ -61,6 +61,23 @@ def compare_strategies(factories, history, settings, config, runner=None):
     return results
 
 
+def with_cadences(runner, cadences):
+    """Apply per-strategy refit cadences, keyed by the run's settings.model_id."""
+    def run(factory, history, settings, config, **options):
+        sessions = cadences.get(settings.model_id)
+        if sessions is not None:
+            config = replace(config, rebalance_sessions=sessions)
+        return runner(factory, history, settings, config, **options)
+    return run
+
+
+def parse_cadences(value):
+    cadences = json.loads(value or "{}")
+    if not isinstance(cadences, dict) or any(type(v) is not int or v < 1 for v in cadences.values()):
+        raise ValueError("RESEARCH_REBALANCE_BY_MODEL must map model IDs to positive integers")
+    return cadences
+
+
 def main(argv=None):
     args = sys.argv[1:] if argv is None else argv
     if args == ["--help"]:
@@ -81,7 +98,10 @@ def main(argv=None):
         spread_bps=float(os.getenv("RESEARCH_SPREAD_BPS", "5")),
         slippage_bps=float(os.getenv("RESEARCH_SLIPPAGE_BPS", "5")),
         fee_bps=float(os.getenv("RESEARCH_FEE_BPS", "0")),
+        lookback_sessions=int(os.environ["RESEARCH_LOOKBACK_SESSIONS"]) if os.getenv("RESEARCH_LOOKBACK_SESSIONS")
+        else None,
     )
+    cadences = parse_cadences(os.getenv("RESEARCH_REBALANCE_BY_MODEL"))
     reserved = int(os.getenv("RESEARCH_FINAL_TEST_SESSIONS", "20"))
     if reserved < 1 or len(dataset.history.spy) <= config.warmup_sessions + reserved:
         raise ValueError("Need development and reserved final-test sessions after warmup")
@@ -96,12 +116,13 @@ def main(argv=None):
     registry = ModelRegistry()
     mode = "final_test" if final_mode else "development"
     trial = {"dataset_sha256": digest, "evaluation_mode": mode, "output": args[1],
-             "config": asdict(config), **protocol_record(experiment)}
+             "config": asdict(config), "rebalance_by_model": cadences, **protocol_record(experiment)}
     trial_log = Path(os.getenv("RESEARCH_TRIAL_LOG", str(Path(args[1]).parent / "research-trials.jsonl")))
     # Datasets with events execute on raw prices; models still see adjusted history.
     runner = run_backtest
     if not dataset.events.is_empty():
         runner = partial(run_backtest, market_events=dataset.events)
+    runner = with_cadences(runner, cadences)
     try:
         if experiment == "allocation":
             model_types = {name: registry.require(name).model_type for name in ALLOCATION_SIGNALS}
@@ -130,7 +151,7 @@ def main(argv=None):
               "ingested_at": dataset.ingested_at.isoformat() if dataset.ingested_at else None,
               "protocol": protocol_record(experiment),
               "selection_notes": dataset.selection_notes, "annualization_sessions": 252,
-              "evaluation_mode": mode, "trial_log": str(trial_log),
+              "evaluation_mode": mode, "trial_log": str(trial_log), "rebalance_by_model": cadences,
               "reserved_final_start": final_start.isoformat(), "reserved_final_sessions": reserved,
               "results": results}
     Path(args[1]).write_text(json.dumps(output, indent=2, allow_nan=False) + "\n")

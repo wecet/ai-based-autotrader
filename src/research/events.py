@@ -1,7 +1,9 @@
 """Point-in-time corporate actions, universe membership and instrument availability."""
+import bisect
 import datetime
 from typing import Literal
 
+import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from core.types import DailyBar, MarketHistory
@@ -84,24 +86,22 @@ def adjust_bars(bars, actions):
     Bars before a split's ex-date are divided by its ratio (volume multiplied).
     Bars before a cash payment's ex-date are scaled by 1 - cash / prior close.
     """
-    factors = [1.0] * len(bars)
-    volume_factors = [1.0] * len(bars)
+    factors = np.ones(len(bars))
+    volume_factors = np.ones(len(bars))
     for action in actions:
-        before = [index for index, bar in enumerate(bars) if bar.date < action.ex_date]
+        before = bisect.bisect_left(bars, action.ex_date, key=lambda b: b.date)
         if not before:
             continue
         if action.kind == "split":
-            price_factor, volume_factor = 1 / action.value, action.value
-        else:
-            prior_close = bars[before[-1]].close
-            if action.value >= prior_close:
-                raise ValueError("Cash distribution must be smaller than the prior close")
-            price_factor, volume_factor = 1 - action.value / prior_close, 1.0
-        for index in before:
-            factors[index] *= price_factor
-            volume_factors[index] *= volume_factor
+            factors[:before] /= action.value
+            volume_factors[:before] *= action.value
+            continue
+        prior_close = bars[before - 1].close
+        if action.value >= prior_close:
+            raise ValueError("Cash distribution must be smaller than the prior close")
+        factors[:before] *= 1 - action.value / prior_close
     return [DailyBar(b.date, b.open * f, b.high * f, b.low * f, b.close * f, b.volume * v)
-            for b, f, v in zip(bars, factors, volume_factors)]
+            for b, f, v in zip(bars, factors.tolist(), volume_factors.tolist())]
 
 
 def research_history(history: MarketHistory, events: MarketEvents, cutoff: datetime.date) -> MarketHistory:
