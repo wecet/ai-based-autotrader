@@ -72,6 +72,12 @@ def allocate_targets(signals: Sequence[TargetSignal], current_weights: Mapping[s
       if s.symbol in targets or current_weights.get(s.symbol, 0.0) > 0]
 
 
+def veto_new_entries(signals: Sequence[TargetSignal], rejected, current_weights: Mapping[str, float]):
+    """Zero vetoed signals unless already held; holdings keep their own exit rules."""
+    return [replace(s, allocation_weight=0.0) if s.symbol in rejected and current_weights.get(s.symbol, 0) <= 0
+            else s for s in signals]
+
+
 ALLOCATION_METHODS = ("capped", "equal", "inverse_volatility", "hierarchical_risk")
 
 

@@ -244,3 +244,10 @@ def test_reversion_experiment_compares_both_variants_with_baselines():
     factories = strategy_factories(ModelRegistry(), 'reversion')
     assert list(factories) == ['momentum_rotation', 'boosted_ranker', 'residual_reversion',
                                'residual_reversion_filtered']
+
+
+def test_meta_experiment_compares_against_unfiltered_momentum():
+    from core.registry import ModelRegistry
+    from research.__main__ import strategy_factories
+    assert list(strategy_factories(ModelRegistry(), 'meta_momentum')) == ['momentum_rotation', 'boosted_ranker',
+                                                                          'meta_momentum']

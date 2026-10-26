@@ -5,7 +5,7 @@ import numpy as np
 
 from core.contracts import Model
 from core.registry import ModelDefinition
-from trading.allocation import TargetSignal, allocate_targets, trailing_returns
+from trading.allocation import TargetSignal, allocate_targets, trailing_returns, veto_new_entries
 from trading.features import calculate_features, residual_zscores, reversion_episode_age
 
 ENTRY_SCORE = -2.0
@@ -67,10 +67,7 @@ class ResidualReversionModel(Model):
         return list(self.signals)
 
     def candidates(self, current_weights, portfolio_value, limits):
-        signals = [TargetSignal(s.symbol, s.price, s.group, s.score, s.expected_return,
-                                0.0 if s.symbol in self.rejected and current_weights.get(s.symbol, 0) <= 0
-                                else s.allocation_weight)
-                   for s in self.signals]
+        signals = veto_new_entries(self.signals, self.rejected, current_weights)
         return allocate_targets(signals, current_weights, portfolio_value, limits, self.universe, proportional=True)
 
     def decide_to_buy(self, context):

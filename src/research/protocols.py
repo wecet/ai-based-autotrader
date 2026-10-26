@@ -47,6 +47,17 @@ PROTOCOLS = {
                             "Gains depend on the one-session-delay-free case only.",
                             "The filtered variant does not improve net return or drawdown over the "
                             "unfiltered baseline after costs.")),
+    "meta_momentum": ResearchProtocol(
+        hypothesis="A classifier trained on past momentum-rule outcomes improves net momentum results by "
+                   "rejecting poor new entries.",
+        universe=COMMON_UNIVERSE, information_cutoff=COMMON_CUTOFF,
+        horizon="Label every rule opportunity by its next-open to open-21-sessions-later return net of a 0.2% "
+                "round trip; train only on outcomes completed by the cutoff.",
+        benchmark="Unfiltered momentum rotation and boosted ranking on the same sessions.",
+        rejection_criteria=("Accepted entries do not beat unfiltered momentum's mean net outcome.",
+                            "Missed upside exceeds avoided losses.",
+                            "Net return or drawdown is not better than unfiltered momentum after double costs.",
+                            "Brier score is no better than predicting the base rate.")),
 }
 
 

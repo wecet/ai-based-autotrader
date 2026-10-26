@@ -11,6 +11,7 @@ from core.registry import ModelRegistry
 from research.allocation import compare_allocations
 from research.backtest import BacktestConfig, history_before, run_backtest
 from research.datasets import load_dataset, synthetic_dataset
+from research.meta_labeling import meta_decision_quality
 from research.protocols import PROTOCOLS, append_trials, protocol_record
 
 USAGE = "Usage: python -m research DATASET.json OUTPUT.json | --demo OUTPUT.json"
@@ -19,6 +20,9 @@ ALLOCATION_SIGNALS = ("momentum_rotation", "boosted_ranker")
 
 
 def strategy_factories(registry, experiment):
+    if experiment == "meta_momentum":
+        return {name: registry.require(name).model_type
+                for name in ("momentum_rotation", "boosted_ranker", "meta_momentum")}
     if experiment == "reversion":
         from models.residual_reversion import FilteredResidualReversionModel
         names = ("momentum_rotation", "boosted_ranker", "residual_reversion")
@@ -85,6 +89,9 @@ def main(argv=None):
             results = compare_allocations(model_types, evaluation_history, settings, config, runner=run_backtest)
         else:
             results = compare_strategies(strategy_factories(registry, experiment), evaluation_history, settings, config)
+            if experiment == "meta_momentum":
+                results["meta_momentum"]["decision_quality"] = meta_decision_quality(
+                    evaluation_history, settings, config, runner=run_backtest)
     except Exception as error:
         append_trials(trial_log, {**trial, "status": "failed", "error": type(error).__name__ + ": " + str(error)})
         raise

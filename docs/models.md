@@ -7,7 +7,8 @@ separate list of strategy names or descriptions.
 
 The shipped strategies are `cross_sectional` (ridge baseline),
 `momentum_rotation` (trend and inverse volatility), `boosted_ranker`
-(nonlinear ranks with chronological return calibration), and
+(nonlinear ranks with chronological return calibration), `meta_momentum`
+(momentum entries filtered by a classifier of past rule outcomes), and
 `residual_reversion` (long-only recovery from unusual residual weakness). See
 [strategy research](research.md) for their methods and validation.
 
