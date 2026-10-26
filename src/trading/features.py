@@ -229,3 +229,69 @@ def reversion_episode_age(scores: Sequence[float], *, entry: float, exit: float,
         elif age is None and armed:
             age, armed = 0, False
     return age
+
+
+MOMENTUM_FEATURE_NAMES = (
+    "momentum_12_1",
+    "volatility_60d",
+    "distance_from_ma200",
+    "return_20d",
+    "return_5d",
+    "volume_ratio_20d",
+    "group_relative_return_20d",
+    "spy_trend_20d",
+    "spy_volatility_20d",
+)
+
+
+def _rolling(values, window):
+    from numpy.lib.stride_tricks import sliding_window_view
+    return sliding_window_view(values, window)
+
+
+def momentum_panel(bars: Sequence[DailyBar], spy_bars: Sequence[DailyBar], group_bars: Sequence[DailyBar],
+                   *, minimum_price: float = 10.0, minimum_average_dollar_volume: float = 5_000_000.0):
+    """Momentum-rule eligibility, inverse-volatility weights and features for every session.
+
+    Row t uses closes up to t only and reproduces the momentum rotation rule:
+    positive 12-minus-1-month return, close above its 200-session average,
+    positive 60-session volatility and the price/liquidity filters. Rows before
+    253 sessions are ineligible with NaN features.
+    """
+    closes = np.asarray([b.close for b in bars], dtype=float)
+    volumes = np.asarray([b.volume for b in bars], dtype=float)
+    spy = np.asarray([b.close for b in spy_bars], dtype=float)
+    group = np.asarray([b.close for b in group_bars], dtype=float)
+    count = len(closes)
+    if not count == len(spy) == len(group):
+        raise ValueError("Momentum inputs must be aligned")
+    features = np.full((count, len(MOMENTUM_FEATURE_NAMES)), np.nan)
+    eligible = np.zeros(count, dtype=bool)
+    weights = np.zeros(count)
+    if count < 253:
+        return eligible, weights, features
+    returns = np.diff(closes) / closes[:-1]
+    spy_returns = np.diff(spy) / spy[:-1]
+    t = np.arange(252, count)
+    score = closes[t - 21] / closes[t - 252] - 1
+    average_200 = _rolling(closes, 200).mean(axis=1)[t - 199]
+    volatility = _rolling(returns, 60).std(axis=1, ddof=1)[t - 60]
+    liquidity = _rolling(closes * volumes, 20).mean(axis=1)[t - 19]
+    average_volume = _rolling(volumes, 20).mean(axis=1)[t - 19]
+    spy_volatility = _rolling(spy_returns, 20).std(axis=1, ddof=1)[t - 20] * np.sqrt(252.0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        features[t] = np.column_stack((
+            score, volatility, closes[t] / average_200 - 1, closes[t] / closes[t - 20] - 1,
+            closes[t] / closes[t - 5] - 1, np.where(average_volume > 0, volumes[t] / average_volume, 0.0),
+            closes[t] / closes[t - 20] - group[t] / group[t - 20], spy[t] / spy[t - 20] - 1, spy_volatility))
+        eligible[t] = ((score > 0) & (closes[t] > average_200) & (volatility > 0) & (closes[t] > minimum_price)
+                       & (liquidity > minimum_average_dollar_volume) & np.isfinite(features[t]).all(axis=1))
+        weights[t] = np.where(eligible[t], 1 / volatility, 0.0)
+    return eligible, weights, features
+
+
+def next_open_outcome(bars: Sequence[DailyBar], day: int, horizon: int, round_trip_cost: float) -> float | None:
+    """Net return from the next session's open to the open ``horizon`` sessions later."""
+    if day + 1 + horizon >= len(bars):
+        return None
+    return bars[day + 1 + horizon].open / bars[day + 1].open - 1 - round_trip_cost

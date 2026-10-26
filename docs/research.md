@@ -1,6 +1,6 @@
 # Strategy research and evaluation
 
-The dashboard discovers four daily, long-only strategies. Only one is active;
+The dashboard discovers five daily, long-only strategies. Only one is active;
 installing a strategy does not select it or change saved risk settings.
 
 | Model ID | Method | Interpretation |
@@ -8,6 +8,7 @@ installing a strategy does not select it or change saved risk settings.
 | `cross_sectional` | Original ridge regression on within-date five-session return ranks | Linear baseline, with the existing in-sample return calibration preserved |
 | `momentum_rotation` | Positive 12-minus-1-month momentum above a 200-session moving average; inverse-volatility targets | Historical momentum score, not a return forecast |
 | `boosted_ranker` | Histogram gradient-boosted return ranks with a later return-calibration window | Estimated five-session return, used only when its calibrated edge exceeds costs |
+| `meta_momentum` | Momentum rotation entries accepted only when a classifier, trained on past rule outcomes, predicts a net gain | Classifier probability gates entries; momentum score and sizing are unchanged |
 | `residual_reversion` | Long-only entries on unusually weak five-session residuals versus SPY and the group benchmark | Standardized residual score, not a return forecast |
 
 ## Model boundaries
@@ -99,7 +100,7 @@ from repeated tests on the final interval.
 | `RESEARCH_SPREAD_BPS` | `5` | Per-side spread impact assumption |
 | `RESEARCH_SLIPPAGE_BPS` | `5` | Per-side slippage assumption |
 | `RESEARCH_FEE_BPS` | `0` | Per-side fee assumption |
-| `RESEARCH_EXPERIMENT` | `baselines` | `baselines`, `allocation` (sizing methods) or `reversion` (residual reversion variants) |
+| `RESEARCH_EXPERIMENT` | `baselines` | `baselines`, `allocation` (sizing methods), `reversion` (residual reversion variants) or `meta_momentum` |
 | `RESEARCH_TRIAL_LOG` | `research-trials.jsonl` beside the output | Append-only record of every run, including failures |
 
 The CLI uses `TradingSettings` defaults and any exported `TRADER_*` overrides,
@@ -158,6 +159,33 @@ filtered variant is research-only and not in the dashboard catalog.
 momentum and boosted ranking, including double-cost and one-session-delay stress
 runs. On the synthetic demo the filter has too few signals to fit and makes no
 trades, as designed.
+
+## Meta-labelled momentum
+
+`models/meta_momentum.py` composes two independent parts. The signal component is
+`trading.features.momentum_panel`, which reproduces the momentum rotation rule,
+inverse-volatility weight and nine features (`MOMENTUM_FEATURE_NAMES`) for every
+past session using only bars up to that session. A test checks that its latest
+row matches `MomentumRotationModel` exactly. The classifier component is any
+object with `fit` and `predict_proba`; the default is a standardized logistic
+regression (C = 0.5) fitted inside each preparation.
+
+Labels are declared before tuning: every rule-eligible opportunity, selected or
+not, is labeled 1 when the return from the next session's open to the open 21
+sessions later exceeds a 0.2% round trip. Only outcomes completed by the latest
+bar are used, so the most recent 22 sessions never enter training. New entries
+with predicted probability below 0.5 are vetoed through
+`trading.allocation.veto_new_entries`; holdings keep momentum's exits and
+sizing. With fewer than 60 labeled outcomes, or only one class, no new entries
+are accepted, so the model needs roughly 275+ sessions before it can trade.
+
+`RESEARCH_EXPERIMENT=meta_momentum` compares it with momentum and boosted
+ranking, with cost and delay stress, and adds `decision_quality` for the
+out-of-sample decisions made during the walk-forward run. It reports acceptance
+rate, mean net outcome for all, accepted and rejected opportunities, missed upside
+(summed positive rejected outcomes), avoided losses, Brier score and five
+calibration bins. Decisions whose 21-session outcome lies beyond the evaluation
+data are counted as unresolved, not dropped.
 
 ## Allocation comparison
 

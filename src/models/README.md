@@ -10,6 +10,7 @@ persistent order journal belong to the shared trading infrastructure.
 | [cross_sectional.py](cross_sectional.py) | Cross-sectional ranking | Linear ridge regression on return ranks | Five-session forward return |
 | [momentum_rotation.py](momentum_rotation.py) | Momentum rotation | Historical trend ranking with inverse-volatility sizing | Approximately 12 months, excluding the latest month |
 | [boosted_ranker.py](boosted_ranker.py) | Boosted return ranking | Nonlinear boosted-tree rank regression with chronological return calibration | Five-session forward return |
+| [meta_momentum.py](meta_momentum.py) | Meta-labelled momentum | Momentum rule entries filtered by a logistic classifier of past rule outcomes | Approximately 12 months; 21-session labels |
 | [residual_reversion.py](residual_reversion.py) | Residual mean reversion | Long-only entries on standardized five-session residuals versus SPY and the group benchmark | Up to ten sessions, with explicit exits |
 | [_template.py](_template.py) | Not selectable | Abstract scaffold for another strategy | Defined by its implementation |
 
@@ -252,6 +253,16 @@ breakdown classifier trained only on completed past outcomes. Vetoes apply to ne
 entries, never to existing holdings. It is a research variant with no `MODEL`
 export. See [strategy research](../../docs/research.md#residual-mean-reversion).
 
+## Meta-labelled momentum: classifier-filtered entries
+
+[MetaMomentumModel](meta_momentum.py) takes opportunities from
+`trading.features.momentum_panel`, which reproduces the momentum rule for every
+past session, and accepts a `classifier_factory` exposing `fit`/`predict_proba`.
+It labels every completed rule opportunity by its next-open, 21-session return
+net of a 0.2% round trip, fits the classifier, and vetoes new entries with
+probability below 0.5. Exits and inverse-volatility sizing match momentum. See
+[strategy research](../../docs/research.md#meta-labelled-momentum).
+
 ## Shared allocation, execution and switching
 
 [allocate_targets](../trading/allocation.py), used by momentum and boosted
@@ -302,7 +313,7 @@ and allocation components instead of duplicating execution rules.
 Relevant checks:
 
 ```sh
-uv run pytest tests/test_cross_sectional.py tests/test_momentum.py tests/test_boosted_ranker.py tests/test_residual_reversion.py tests/test_allocation.py
+uv run pytest tests/test_cross_sectional.py tests/test_momentum.py tests/test_boosted_ranker.py tests/test_residual_reversion.py tests/test_meta_momentum.py tests/test_allocation.py
 uv run python -m research --demo /tmp/strategy-demo.json
 ```
 
