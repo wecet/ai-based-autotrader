@@ -125,5 +125,6 @@ def validate_events(events: MarketEvents, history: MarketHistory, price_basis: s
             raise ValueError(f"Corporate action references unknown symbol {action.symbol}")
         if action.kind == "split" and price_basis != "raw":
             raise ValueError("Split events require raw prices; split-adjusted bars would be adjusted twice")
-        if action.pay_date is not None and action.pay_date < action.ex_date:
-            raise ValueError("Payment date must not precede the ex-date")
+        # Split shares are often distributed before the ex-date; only cash timing matters to the ledger.
+        if action.kind != "split" and action.pay_date is not None and action.pay_date < action.ex_date:
+            raise ValueError("Cash payment date must not precede the ex-date")
