@@ -69,6 +69,16 @@ PROTOCOLS = {
                             "Drawdown is not lower than momentum rotation's.",
                             "Results reverse between switching margins 0 and 0.2.",
                             "Regimes switch on more than a quarter of sessions.")),
+    "temporal": ResearchProtocol(
+        hypothesis="Return and volume sequences contain predictive structure beyond the boosted-tree baseline.",
+        universe=COMMON_UNIVERSE, information_cutoff=COMMON_CUTOFF,
+        horizon="32-session input sequences; five-session forward return ranks within each date; budget of "
+                "20 epochs, batch 256, three dilated layers of width 8, seed 0, declared before training.",
+        benchmark="Boosted ranking and momentum rotation on the same sessions.",
+        rejection_criteria=("Net return after double costs does not exceed boosted ranking.",
+                            "Calibration slope is flat in more than half of refits.",
+                            "The dataset has fewer than 1,260 sessions; results are not interpreted.",
+                            "Retraining cost is not justified by any improvement.")),
 }
 
 

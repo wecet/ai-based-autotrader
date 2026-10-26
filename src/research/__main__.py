@@ -14,6 +14,7 @@ from research.backtest import BacktestConfig, history_before, run_backtest
 from research.datasets import load_dataset, synthetic_dataset
 from research.meta_labeling import meta_decision_quality
 from research.regime_analysis import transition_sensitivity
+from research.temporal_analysis import history_sufficiency, retraining_cost
 from research.protocols import PROTOCOLS, append_trials, protocol_record
 
 USAGE = "Usage: python -m research DATASET.json OUTPUT.json | --demo OUTPUT.json"
@@ -22,6 +23,9 @@ ALLOCATION_SIGNALS = ("momentum_rotation", "boosted_ranker")
 
 
 def strategy_factories(registry, experiment):
+    if experiment == "temporal":
+        return {name: registry.require(name).model_type
+                for name in ("momentum_rotation", "boosted_ranker", "temporal_network")}
     if experiment == "regime":
         return {name: registry.require(name).model_type
                 for name in ("momentum_rotation", "boosted_ranker", "residual_reversion", "regime_composite")}
@@ -100,6 +104,10 @@ def main(argv=None):
         else:
             results = compare_strategies(strategy_factories(registry, experiment), evaluation_history, settings, config,
                                          runner)
+            if experiment == "temporal":
+                results["temporal_network"]["retraining_cost"] = retraining_cost(
+                    evaluation_history, settings, config, runner=runner)
+                results["temporal_network"]["history_sufficiency"] = history_sufficiency(evaluation_history)
             if experiment == "regime":
                 results["regime_composite"]["transition_sensitivity"] = transition_sensitivity(
                     evaluation_history, settings, config, runner=runner)
