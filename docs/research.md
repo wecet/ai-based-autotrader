@@ -1,6 +1,6 @@
 # Strategy research and evaluation
 
-The dashboard discovers five daily, long-only strategies. Only one is active;
+The dashboard discovers six daily, long-only strategies. Only one is active;
 installing a strategy does not select it or change saved risk settings.
 
 | Model ID | Method | Interpretation |
@@ -9,6 +9,7 @@ installing a strategy does not select it or change saved risk settings.
 | `momentum_rotation` | Positive 12-minus-1-month momentum above a 200-session moving average; inverse-volatility targets | Historical momentum score, not a return forecast |
 | `boosted_ranker` | Histogram gradient-boosted return ranks with a later return-calibration window | Estimated five-session return, used only when its calibrated edge exceeds costs |
 | `meta_momentum` | Momentum rotation entries accepted only when a classifier, trained on past rule outcomes, predicts a net gain | Classifier probability gates entries; momentum score and sizing are unchanged |
+| `regime_composite` | Causal trend/range/stress regimes choose momentum or residual reversion and scale exposure | Filtered regime probabilities; the active component's score |
 | `residual_reversion` | Long-only entries on unusually weak five-session residuals versus SPY and the group benchmark | Standardized residual score, not a return forecast |
 
 ## Model boundaries
@@ -100,7 +101,7 @@ from repeated tests on the final interval.
 | `RESEARCH_SPREAD_BPS` | `5` | Per-side spread impact assumption |
 | `RESEARCH_SLIPPAGE_BPS` | `5` | Per-side slippage assumption |
 | `RESEARCH_FEE_BPS` | `0` | Per-side fee assumption |
-| `RESEARCH_EXPERIMENT` | `baselines` | `baselines`, `allocation` (sizing methods), `reversion` (residual reversion variants) or `meta_momentum` |
+| `RESEARCH_EXPERIMENT` | `baselines` | `baselines`, `allocation` (sizing methods), `reversion` (residual reversion variants), `meta_momentum` or `regime` |
 | `RESEARCH_TRIAL_LOG` | `research-trials.jsonl` beside the output | Append-only record of every run, including failures |
 
 The CLI uses `TradingSettings` defaults and any exported `TRADER_*` overrides,
@@ -186,6 +187,39 @@ rate, mean net outcome for all, accepted and rejected opportunities, missed upsi
 (summed positive rejected outcomes), avoided losses, Brier score and five
 calibration bins. Decisions whose 21-session outcome lies beyond the evaluation
 data are counted as unresolved, not dropped.
+
+## Causal regime adaptation
+
+`trading.features.regime_features` computes four trailing market-state features
+per session: 60-session SPY return, 20-session annualized SPY volatility, the
+fraction of aligned universe stocks above their 50-session average (breadth), and
+the mean pairwise correlation of their last 60 daily returns. Rows before 200
+sessions are NaN.
+
+`trading/regimes.py` fits `FilteredRegimeModel` at each preparation on that
+history only: features are standardized, a three-state diagonal Gaussian mixture
+(seed 0, three initializations, one thread) provides emissions, and a transition
+matrix is counted from the mixture's training assignments with add-one smoothing.
+`filter` runs the forward algorithm, so each probability is p(state | features up
+to that session). No backward smoothing is used. States are named from their
+centroids, not from returns: highest volatility minus trend is `stress`, highest
+trend minus volatility among the rest is `trend`, and the remainder is `range`.
+`dominant_regimes` adds an optional switching margin: a new regime must beat the
+incumbent's probability by the margin.
+
+`models/regime_composite.py` runs momentum rotation in `trend` and residual
+reversion in `range`. In `stress` it uses whichever of the two is more probable,
+and falls back to the other component if the preferred one cannot prepare. Total
+exposure is the configured limit times 1 − P(stress), so configured limits remain
+upper bounds and a certain stress state holds no new positions.
+
+`RESEARCH_EXPERIMENT=regime` compares the composite with static momentum, residual
+reversion and boosted ranking, including cost and delay stress. It adds
+`transition_sensitivity`, which reruns the composite with switching margins 0 and
+0.2 and reports net metrics with regime share, regime and component switches,
+mean spell length, mean stress probability and mean dominant-regime probability.
+On the synthetic demo, the filtered probabilities are near certain, `range`
+dominates, and the composite rarely trades. Treat this as a pipeline check only.
 
 ## Allocation comparison
 

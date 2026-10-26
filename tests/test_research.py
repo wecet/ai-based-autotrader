@@ -251,3 +251,10 @@ def test_meta_experiment_compares_against_unfiltered_momentum():
     from research.__main__ import strategy_factories
     assert list(strategy_factories(ModelRegistry(), 'meta_momentum')) == ['momentum_rotation', 'boosted_ranker',
                                                                           'meta_momentum']
+
+
+def test_regime_experiment_compares_against_static_strategies():
+    from core.registry import ModelRegistry
+    from research.__main__ import strategy_factories
+    assert list(strategy_factories(ModelRegistry(), 'regime')) == ['momentum_rotation', 'boosted_ranker',
+                                                                   'residual_reversion', 'regime_composite']
