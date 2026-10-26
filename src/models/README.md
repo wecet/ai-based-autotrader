@@ -14,6 +14,7 @@ persistent order journal belong to the shared trading infrastructure.
 | [regime_composite.py](regime_composite.py) | Regime-adaptive composite | Forward-filtered trend/range/stress regimes select momentum or reversion; stress scales exposure down | Daily regime; component horizons |
 | [residual_reversion.py](residual_reversion.py) | Residual mean reversion | Long-only entries on standardized five-session residuals versus SPY and the group benchmark | Up to ten sessions, with explicit exits |
 | [temporal_network.py](temporal_network.py) | Temporal network ranking | Compact PyTorch causal TCN on 32-session return/volume sequences with purged return calibration | Five-session forward return |
+| [ensemble.py](ensemble.py) | Static strategy ensemble | Equal-weight average of momentum, boosted ranking and residual reversion targets, trimmed to the position count | Members' horizons |
 | [_template.py](_template.py) | Not selectable | Abstract scaffold for another strategy | Defined by its implementation |
 
 The prediction horizon is not a mandatory holding period. Targets are evaluated
@@ -283,6 +284,14 @@ calibration with a five-date purge, disables allocations when the calibration
 slope is not positive, and records retraining time and update counts. See
 [strategy research](../../docs/research.md#compact-temporal-network).
 
+## Static strategy ensemble
+
+[StaticEnsembleModel](ensemble.py) prepares its members in a fixed order and
+combines their targets with `combine_targets` using `STATIC_WEIGHTS`. Abstaining
+members leave their share in cash. The returned candidates are the only targets
+executed; `shadow_targets` holds each member's own view for broker-free
+comparison. See [strategy research](../../docs/research.md#static-ensemble-and-shadow-comparison).
+
 ## Shared allocation, execution and switching
 
 [allocate_targets](../trading/allocation.py), used by momentum and boosted
@@ -333,7 +342,7 @@ and allocation components instead of duplicating execution rules.
 Relevant checks:
 
 ```sh
-uv run pytest tests/test_cross_sectional.py tests/test_momentum.py tests/test_boosted_ranker.py tests/test_residual_reversion.py tests/test_meta_momentum.py tests/test_regimes.py tests/test_temporal_network.py tests/test_allocation.py
+uv run pytest tests/test_cross_sectional.py tests/test_momentum.py tests/test_boosted_ranker.py tests/test_residual_reversion.py tests/test_meta_momentum.py tests/test_regimes.py tests/test_temporal_network.py tests/test_ensemble.py tests/test_allocation.py
 uv run python -m research --demo /tmp/strategy-demo.json
 ```
 

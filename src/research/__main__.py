@@ -14,6 +14,7 @@ from research.backtest import BacktestConfig, history_before, run_backtest
 from research.datasets import load_dataset, synthetic_dataset
 from research.meta_labeling import meta_decision_quality
 from research.regime_analysis import transition_sensitivity
+from research.shadow import shadow_comparison
 from research.temporal_analysis import history_sufficiency, retraining_cost
 from research.protocols import PROTOCOLS, append_trials, protocol_record
 
@@ -23,6 +24,9 @@ ALLOCATION_SIGNALS = ("momentum_rotation", "boosted_ranker")
 
 
 def strategy_factories(registry, experiment):
+    if experiment == "ensemble":
+        return {name: registry.require(name).model_type
+                for name in ("momentum_rotation", "boosted_ranker", "residual_reversion", "ensemble")}
     if experiment == "temporal":
         return {name: registry.require(name).model_type
                 for name in ("momentum_rotation", "boosted_ranker", "temporal_network")}
@@ -51,7 +55,8 @@ def compare_strategies(factories, history, settings, config, runner=None):
                                            slippage_bps=config.slippage_bps * 2))
         delay_stress = runner(factory, history, strategy_settings,
                                     replace(config, warmup_sessions=config.warmup_sessions - 1, delay_sessions=1))
-        result["stress_metrics"] = {"double_costs": cost_stress["metrics"], "one_session_delay": delay_stress["metrics"]}
+        result["stress_metrics"] = {"double_costs": cost_stress["metrics"],
+                                    "one_session_delay": delay_stress["metrics"]}
         results[name] = result
     return results
 
@@ -104,6 +109,9 @@ def main(argv=None):
         else:
             results = compare_strategies(strategy_factories(registry, experiment), evaluation_history, settings, config,
                                          runner)
+            if experiment == "ensemble":
+                results["ensemble"]["shadow"] = shadow_comparison(evaluation_history, settings, config,
+                                                                  runner=runner)
             if experiment == "temporal":
                 results["temporal_network"]["retraining_cost"] = retraining_cost(
                     evaluation_history, settings, config, runner=runner)
@@ -119,7 +127,8 @@ def main(argv=None):
         raise
     append_trials(trial_log, {**trial, "status": "completed"})
     output = {"dataset_sha256": digest, "source": dataset.source, "price_basis": dataset.price_basis,
-              "ingested_at": dataset.ingested_at.isoformat() if dataset.ingested_at else None, "protocol": protocol_record(experiment),
+              "ingested_at": dataset.ingested_at.isoformat() if dataset.ingested_at else None,
+              "protocol": protocol_record(experiment),
               "selection_notes": dataset.selection_notes, "annualization_sessions": 252,
               "evaluation_mode": mode, "trial_log": str(trial_log),
               "reserved_final_start": final_start.isoformat(), "reserved_final_sessions": reserved,

@@ -277,3 +277,10 @@ def test_temporal_experiment_reports_cost_and_history_sufficiency():
     assert report['refits'] == 2
     assert report['mean_training_seconds'] == 2
     assert report['flat_calibration_share'] == .5
+
+
+def test_ensemble_experiment_compares_against_each_member():
+    from core.registry import ModelRegistry
+    from research.__main__ import strategy_factories
+    assert list(strategy_factories(ModelRegistry(), 'ensemble')) == ['momentum_rotation', 'boosted_ranker',
+                                                                     'residual_reversion', 'ensemble']
