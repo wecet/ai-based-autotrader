@@ -1,5 +1,6 @@
 """Compare registered strategies on a frozen dataset without broker access."""
 from dataclasses import asdict, replace
+from functools import partial
 import hashlib
 import json
 import os
@@ -35,15 +36,16 @@ def strategy_factories(registry, experiment):
     return {name: registry.require(name).model_type for name in BASELINES}
 
 
-def compare_strategies(factories, history, settings, config):
+def compare_strategies(factories, history, settings, config, runner=None):
+    runner = runner or run_backtest
     results = {}
     for name, factory in factories.items():
         strategy_settings = settings.model_copy(update={"model_id": name})
-        result = run_backtest(factory, history, strategy_settings, config)
-        cost_stress = run_backtest(factory, history, strategy_settings,
+        result = runner(factory, history, strategy_settings, config)
+        cost_stress = runner(factory, history, strategy_settings,
                                    replace(config, spread_bps=config.spread_bps * 2,
                                            slippage_bps=config.slippage_bps * 2))
-        delay_stress = run_backtest(factory, history, strategy_settings,
+        delay_stress = runner(factory, history, strategy_settings,
                                     replace(config, warmup_sessions=config.warmup_sessions - 1, delay_sessions=1))
         result["stress_metrics"] = {"double_costs": cost_stress["metrics"], "one_session_delay": delay_stress["metrics"]}
         results[name] = result
@@ -87,23 +89,29 @@ def main(argv=None):
     trial = {"dataset_sha256": digest, "evaluation_mode": mode, "output": args[1],
              "config": asdict(config), **protocol_record(experiment)}
     trial_log = Path(os.getenv("RESEARCH_TRIAL_LOG", str(Path(args[1]).parent / "research-trials.jsonl")))
+    # Datasets with events execute on raw prices; models still see adjusted history.
+    runner = run_backtest
+    if not dataset.events.is_empty():
+        runner = partial(run_backtest, market_events=dataset.events)
     try:
         if experiment == "allocation":
             model_types = {name: registry.require(name).model_type for name in ALLOCATION_SIGNALS}
-            results = compare_allocations(model_types, evaluation_history, settings, config, runner=run_backtest)
+            results = compare_allocations(model_types, evaluation_history, settings, config, runner=runner)
         else:
-            results = compare_strategies(strategy_factories(registry, experiment), evaluation_history, settings, config)
+            results = compare_strategies(strategy_factories(registry, experiment), evaluation_history, settings, config,
+                                         runner)
             if experiment == "regime":
                 results["regime_composite"]["transition_sensitivity"] = transition_sensitivity(
-                    evaluation_history, settings, config, runner=run_backtest)
+                    evaluation_history, settings, config, runner=runner)
             if experiment == "meta_momentum":
                 results["meta_momentum"]["decision_quality"] = meta_decision_quality(
-                    evaluation_history, settings, config, runner=run_backtest)
+                    evaluation_history, settings, config, runner=runner)
     except Exception as error:
         append_trials(trial_log, {**trial, "status": "failed", "error": type(error).__name__ + ": " + str(error)})
         raise
     append_trials(trial_log, {**trial, "status": "completed"})
-    output = {"dataset_sha256": digest, "source": dataset.source, "protocol": protocol_record(experiment),
+    output = {"dataset_sha256": digest, "source": dataset.source, "price_basis": dataset.price_basis,
+              "ingested_at": dataset.ingested_at.isoformat() if dataset.ingested_at else None, "protocol": protocol_record(experiment),
               "selection_notes": dataset.selection_notes, "annualization_sessions": 252,
               "evaluation_mode": mode, "trial_log": str(trial_log),
               "reserved_final_start": final_start.isoformat(), "reserved_final_sessions": reserved,

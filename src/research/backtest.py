@@ -5,6 +5,7 @@ import math
 import numpy as np
 
 from core.types import MarketHistory, PortfolioLimits
+from research.events import MarketEvents, adjust_bars, research_history
 
 
 @dataclass(frozen=True)
@@ -109,13 +110,21 @@ def regime_sensitivity(snapshots, initial_cash, spy):
             for dimension, labels in groups.items()}
 
 
-def run_backtest(model_factory, history, settings, config=BacktestConfig(), *, order_allowed=None):
+def run_backtest(model_factory, history, settings, config=BacktestConfig(), *, order_allowed=None,
+                 market_events=None):
     """Fit on past bars only; model exceptions are explicit abstention events.
 
-    Split-adjusted OHLCV is an execution proxy, not a corporate-action-aware
-    ledger. Daily bars cannot resolve intraday order timing or actual fillability.
+    Without ``market_events`` split-adjusted OHLCV is an execution proxy. With
+    them, bars are raw execution prices: the ledger applies splits, dividend
+    receivables and delisting settlements, models see total-return prices built
+    from actions known at each cutoff, and the universe follows recorded
+    membership and provider availability. Daily bars cannot resolve intraday
+    order timing or actual fillability.
     """
     validate_history(history)
+    market_events = market_events or MarketEvents()
+    point_in_time = not market_events.is_empty()
+    receivables, dividend_income = [], 0.0
     if len(history.spy) <= config.warmup_sessions + config.delay_sessions:
         raise ValueError("Need evaluation sessions after warmup and execution delay")
     universe = settings.universe
@@ -133,22 +142,46 @@ def run_backtest(model_factory, history, settings, config=BacktestConfig(), *, o
         day = history.spy[index].date
         signal_day = history.spy[index - config.delay_sessions].date
         today = {symbol: bars[day] for symbol, bars in lookup.items() if day in bars}
+        for action in market_events.actions_on(day, {"split"}):
+            if action.symbol in positions:
+                positions[action.symbol] *= action.value
+                marks[action.symbol] /= action.value
+                events.append({"date": day.isoformat(), "symbol": action.symbol, "reason": "split_applied",
+                               "ratio": action.value})
+        for action in market_events.actions_on(day, {"dividend", "distribution"}):
+            if action.symbol in positions:
+                # Holders at the prior close are entitled; cash arrives on the payment date.
+                receivables.append((action.pay_date or day, positions[action.symbol] * action.value))
+        due = sum(amount for pay_date, amount in receivables if pay_date <= day)
+        receivables = [(pay_date, amount) for pay_date, amount in receivables if pay_date > day]
+        cash += due
+        dividend_income += due
+        for symbol, notes in market_events.instruments.items():
+            if notes.delisted_on == day and symbol in positions:
+                proceeds = positions.pop(symbol) * marks[symbol]
+                cash += proceeds
+                events.append({"date": day.isoformat(), "symbol": symbol, "reason": "delisting_settlement",
+                               "proceeds": proceeds, "inferred": notes.delisting_inferred})
+        pending = sum(amount for _, amount in receivables)
         # At decision/execution time only the open is known. End-of-day marks
         # are used below solely for end-of-session accounting.
         open_marks = {**marks, **{symbol: bar.open for symbol, bar in today.items()}}
-        equity_open = cash + sum(qty * open_marks[symbol] for symbol, qty in positions.items())
+        equity_open = cash + pending + sum(qty * open_marks[symbol] for symbol, qty in positions.items())
         if (index - first) % config.rebalance_sessions == 0:
             model = model_factory()
             model.configure(settings)
             snapshot = history_before(history, signal_day)
+            members = {s: g for s, g in universe.items() if market_events.member(s, signal_day)}
+            if point_in_time and snapshot.spy:
+                snapshot = research_history(snapshot, market_events, snapshot.spy[-1].date)
             # Match the live provider's requirement that candidate and group
             # histories contain exactly the benchmark's completed sessions.
             dates = [b.date for b in snapshot.spy]
             snapshot = MarketHistory({s: bars for s, bars in snapshot.stocks.items()
-                                      if s in universe and [b.date for b in snapshot.sectors.get(universe[s], [])] == dates},
+                                      if s in members and [b.date for b in snapshot.sectors.get(members[s], [])] == dates},
                                      snapshot.spy, snapshot.sectors)
             try:
-                model.prepare(snapshot, universe)
+                model.prepare(snapshot, members)
                 ready = True
             except ValueError as error:
                 ready = False
@@ -206,20 +239,28 @@ def run_backtest(model_factory, history, settings, config=BacktestConfig(), *, o
                               "partial": notional + .01 < candidate.order_notional})
         marks.update({symbol: bar.close for symbol, bar in today.items()})
         value = sum(qty * marks[symbol] for symbol, qty in positions.items())
-        equity = cash + value
+        equity = cash + pending + value
         if cash < -1e-6 or equity <= 0 or not math.isfinite(equity):
             raise ValueError("Invalid portfolio accounting")
-        snapshots.append({"date": day.isoformat(), "cash": cash, "equity": equity,
+        snapshots.append({"date": day.isoformat(), "cash": cash, "equity": equity, "dividends_receivable": pending,
                           "positions": dict(positions), "exposure": value / equity,
                           "stale_marks": sorted(s for s in positions if s not in today)})
     result = metrics(snapshots, fills, config.initial_cash)
     result["spy_price_return"] = history.spy[-1].close / history.spy[first].open - 1
     result["excess_price_return"] = result["net_return"] - result["spy_price_return"]
+    spy_actions = [a for a in market_events.corporate_actions if a.symbol == "SPY" and a.known_by(history.spy[-1].date)]
+    spy_total = adjust_bars(history.spy, spy_actions)
+    result["spy_total_return"] = spy_total[-1].close / spy_total[first].open - 1
+    result["dividend_income"] = dividend_income
     result["regimes"] = regime_sensitivity(snapshots, config.initial_cash, history.spy)
     return {"config": asdict(config), "settings": settings.model_dump(), "metrics": result,
             "snapshots": snapshots, "fills": fills, "events": events,
-            "limitations": ["Static universe: survivorship bias is not corrected.",
-                            "Split-adjusted price returns omit dividends, taxes and cash interest.",
+            "limitations": [*(["Membership, corporate actions and delistings follow the supplied events; "
+                               "symbols listed after the first session are excluded by alignment.",
+                               "Ledger includes splits and cash distributions; taxes and cash interest are omitted."]
+                              if point_in_time else
+                              ["Static universe: survivorship bias is not corrected.",
+                               "Split-adjusted price returns omit dividends, taxes and cash interest."]),
                             "Daily opens approximate fills; intraday timing, market impact and broker rejection probabilities are not modeled.",
                             "Liquidity uses prior completed volume; partial orders are not carried as pending broker orders.",
                             "These walk-forward results are development evidence; preserve an untouched dataset for final evaluation."]}

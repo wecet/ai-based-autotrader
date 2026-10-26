@@ -72,6 +72,58 @@ invalid prices and inconsistent OHLC. A file hash records the exact input.
 Use split-adjusted prices consistently; the current ledger does not apply
 separate split events or dividend distributions.
 
+### Point-in-time datasets
+
+Datasets may also carry `price_basis` (`split_adjusted`, the default, or `raw`),
+`ingested_at`, `information_notes`, and an `events` object (`research/events.py`):
+
+| Field | Meaning |
+| --- | --- |
+| `corporate_actions` | `split` (`value` = new shares per old share), `dividend` or `distribution` (cash per share), with `ex_date`, optional `pay_date`, `published_at` and provider `processed_on` |
+| `membership` | Per-symbol inclusive `start`/`end` intervals; symbols without intervals are permanent members |
+| `instruments` | `kind` (`stock`, `etf`, `commodity_fund`), `available_from`, `delisted_on`, `delisting_inferred`, `roll_exposure` |
+
+The loader rejects split events on split-adjusted prices (double adjustment),
+actions for unknown symbols, and payment dates before ex-dates. Existing files
+without these fields load unchanged and keep the original behavior.
+
+When events are present, bars are raw execution prices and the research CLI
+passes them to `run_backtest(..., market_events=...)`:
+
+- Models receive history back-adjusted for splits and cash payments into
+  total-return research prices, using only actions whose ex-date and publication
+  time are on or before the snapshot's last session.
+- Each preparation's universe contains only symbols that are members, and
+  available from the provider, on the signal date. Holdings that leave the
+  universe are retained, matching the runtime. Symbols listed after the first
+  session never align with SPY and are excluded; this is a known limitation.
+- The ledger multiplies held shares on a split's ex-date. Cash payments accrue to
+  holders at the prior close and are paid on `pay_date` (or the ex-date);
+  receivables count toward equity and are reported. Holdings settle at their
+  last close on `delisted_on`, and the report records whether the delisting was
+  inferred.
+- Reports add `dividend_income` and `spy_total_return` (SPY with its known
+  distributions) beside the existing price return.
+
+Build a frozen raw dataset from Alpaca with corporate actions:
+
+```sh
+RESEARCH_START=2016-01-01 TRADER_FEED=sip \
+  uv run python -m research.build_dataset /path/to/dataset.json
+```
+
+It requests raw (unadjusted) bars and forward/reverse splits and cash dividends
+for `TRADER_UNIVERSE`, its benchmark groups and SPY. It records `ingested_at`
+and prints the file's SHA-256. Sessions on or after the run date are excluded.
+Cash from funds marked `commodity_fund` is labeled a distribution. Provider data
+has no historical index membership: supply intervals with
+`RESEARCH_MEMBERSHIP_FILE` (JSON `{symbol: [{start, end}]}`), and kinds or roll
+notes with `RESEARCH_INSTRUMENT_FILE` (JSON `{symbol: {...}}`). Delistings are
+inferred when a symbol's bars stop more than five days before SPY's last
+session. Alpaca supplies process dates, not announcement times, so actions
+are treated as known from their ex-date. `RESEARCH_END` defaults to today.
+IEX history is shorter than SIP; use the feed your subscription supports.
+
 The API is `research.backtest.run_backtest(model_factory, history, settings,
 config)`. A fresh model is fitted on completed bars before each preparation
 cutoff. For five-session labels, the last usable training outcome is already
@@ -252,9 +304,9 @@ position and all methods produce identical targets. Differences only appear when
 the position cap leaves room, for example with more names or a higher cap.
 
 Daily opens approximate executions: they cannot reproduce one-order-per-cycle
-intraday timing, actual broker rejection rates, or live market impact. Results
-use a static universe, omit dividends/taxes/cash interest, and are not corrected
-for survivorship bias. The SPY comparison is an unlevered price-return benchmark,
+intraday timing, actual broker rejection rates, or live market impact. Without
+point-in-time events, results use a static universe, omit dividends, and are not
+corrected for survivorship bias. Taxes and cash interest are always omitted. The SPY comparison is an unlevered price-return benchmark,
 while strategies remain within configured exposure caps. These limitations
 prevent treating a successful synthetic run as investment evidence.
 
