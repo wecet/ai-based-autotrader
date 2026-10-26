@@ -16,6 +16,7 @@ dependencies = [
     "fastapi>=0.115,<1",
     "uvicorn>=0.30,<1",
     "scikit-learn>=1.7,<2",
+    "torch>=2.6,<3",
 ]
 
 [project.scripts]
@@ -40,6 +41,15 @@ dashboard = ["static/*.html", "static/*.css", "static/*.js", "static/*.svg", "st
 
 [dependency-groups]
 dev = ["pytest>=8.3,<10", "pytest-cov>=6,<8", "httpx>=0.28,<1"]
+
+# Linux (Docker) installs CPU-only wheels; CUDA builds would add gigabytes unused here.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

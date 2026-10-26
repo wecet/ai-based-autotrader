@@ -13,7 +13,7 @@ persistent order journal belong to the shared trading infrastructure.
 | [meta_momentum.py](meta_momentum.py) | Meta-labelled momentum | Momentum rule entries filtered by a logistic classifier of past rule outcomes | Approximately 12 months; 21-session labels |
 | [regime_composite.py](regime_composite.py) | Regime-adaptive composite | Forward-filtered trend/range/stress regimes select momentum or reversion; stress scales exposure down | Daily regime; component horizons |
 | [residual_reversion.py](residual_reversion.py) | Residual mean reversion | Long-only entries on standardized five-session residuals versus SPY and the group benchmark | Up to ten sessions, with explicit exits |
-| [temporal_network.py](temporal_network.py) | Temporal network ranking | Compact NumPy causal TCN on 32-session return/volume sequences with purged return calibration | Five-session forward return |
+| [temporal_network.py](temporal_network.py) | Temporal network ranking | Compact PyTorch causal TCN on 32-session return/volume sequences with purged return calibration | Five-session forward return |
 | [_template.py](_template.py) | Not selectable | Abstract scaffold for another strategy | Defined by its implementation |
 
 The prediction horizon is not a mandatory holding period. Targets are evaluated

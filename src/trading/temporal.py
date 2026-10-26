@@ -1,4 +1,4 @@
-"""A compact causal temporal convolutional network in NumPy, plus point-in-time sequences."""
+"""A compact causal temporal convolutional network (PyTorch) and point-in-time sequences."""
 from dataclasses import dataclass
 from typing import Mapping, Sequence
 
@@ -23,74 +23,54 @@ class TrainingBudget:
     seed: int = 0
 
 
-def _shift(values, steps):
-    """Delay along time by ``steps`` with zero padding, so position t sees t - steps."""
-    if steps == 0:
-        return values
-    shifted = np.zeros_like(values)
-    shifted[:, steps:] = values[:, :-steps]
-    return shifted
-
-
-def _unshift(values, steps):
-    if steps == 0:
-        return values
-    shifted = np.zeros_like(values)
-    shifted[:, :-steps] = values[:, steps:]
-    return shifted
-
-
 class TemporalConvNet:
-    """Dilated causal convolutions with ReLU, read out at the final session.
+    """Dilated causal convolutions with ReLU in PyTorch, read out at the final session.
 
-    Inputs are (samples, sessions, channels). Each layer's output at session t
-    depends only on sessions up to t. Channel scaling is fitted inside ``fit``.
-    Training uses mini-batch Adam with the declared budget and a fixed seed.
+    Inputs are (samples, sessions, channels). Left-only padding makes each
+    layer's output at session t depend only on sessions up to t. Channel scaling
+    is fitted inside ``fit``. Training is CPU-only, single-threaded, seeded and
+    deterministic, using mini-batch AdamW with the declared budget.
     """
 
     def __init__(self, budget: TrainingBudget = TrainingBudget()):
         self.budget = budget
-        self.parameters = None
+        self.network = None
 
-    def _initialize(self, channels, generator):
-        budget, parameters, width = self.budget, {}, channels
-        for layer, _ in enumerate(budget.dilations):
-            scale = np.sqrt(2 / (width * budget.kernel))
-            parameters[f"w{layer}"] = generator.normal(0, scale, (budget.kernel, width, budget.hidden))
-            parameters[f"b{layer}"] = np.zeros(budget.hidden)
-            width = budget.hidden
-        parameters["v"] = generator.normal(0, np.sqrt(1 / width), width)
-        parameters["c"] = np.zeros(())
-        return parameters
+    def _build(self, channels):
+        import torch
+        budget = self.budget
 
-    def _forward(self, x, parameters):
-        cache, hidden = [], x
-        for layer, dilation in enumerate(self.budget.dilations):
-            shifted = [_shift(hidden, k * dilation) for k in range(self.budget.kernel)]
-            output = parameters[f"b{layer}"] + sum(s @ parameters[f"w{layer}"][k] for k, s in enumerate(shifted))
-            cache.append((shifted, output))
-            hidden = np.maximum(output, 0)
-        return hidden[:, -1] @ parameters["v"] + parameters["c"], hidden, cache
+        class CausalLayer(torch.nn.Module):
+            def __init__(self, width, dilation):
+                super().__init__()
+                self.padding = (budget.kernel - 1) * dilation
+                self.convolution = torch.nn.Conv1d(width, budget.hidden, budget.kernel, dilation=dilation)
 
-    def loss_and_gradients(self, x, y, parameters):
-        prediction, hidden, cache = self._forward(x, parameters)
-        error = prediction - y
-        loss = float(np.mean(error ** 2))
-        d_prediction = 2 * error / len(y)
-        gradients = {"v": hidden[:, -1].T @ d_prediction, "c": np.asarray(d_prediction.sum())}
-        d_hidden = np.zeros_like(hidden)
-        d_hidden[:, -1] = np.outer(d_prediction, parameters["v"])
-        for layer in reversed(range(len(self.budget.dilations))):
-            shifted, output = cache[layer]
-            d_output = d_hidden * (output > 0)
-            dilation = self.budget.dilations[layer]
-            weights = parameters[f"w{layer}"]
-            gradients[f"w{layer}"] = np.stack([np.einsum("ntc,nth->ch", s, d_output) for s in shifted])
-            gradients[f"b{layer}"] = d_output.sum(axis=(0, 1))
-            d_hidden = sum(_unshift(d_output @ weights[k].T, k * dilation) for k in range(self.budget.kernel))
-        return loss, gradients
+            def forward(self, x):
+                return torch.relu(self.convolution(torch.nn.functional.pad(x, (self.padding, 0))))
+
+        class Network(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                widths = [channels] + [budget.hidden] * (len(budget.dilations) - 1)
+                self.layers = torch.nn.Sequential(*(CausalLayer(w, d) for w, d in zip(widths, budget.dilations)))
+                self.head = torch.nn.Linear(budget.hidden, 1)
+
+            def hidden(self, x):
+                return self.layers(x.transpose(1, 2)).transpose(1, 2)
+
+            def forward(self, x):
+                return self.head(self.hidden(x)[:, -1]).squeeze(-1)
+
+        return Network()
+
+    def _tensor(self, sequences):
+        import torch
+        x = (np.asarray(sequences, dtype=float) - self.mean) / self.scale
+        return torch.as_tensor(x, dtype=torch.float32)
 
     def fit(self, sequences, targets):
+        import torch
         x = np.asarray(sequences, dtype=float)
         y = np.asarray(targets, dtype=float)
         if x.ndim != 3 or len(x) != len(y) or len(x) == 0:
@@ -98,39 +78,46 @@ class TemporalConvNet:
         self.mean = x.reshape(-1, x.shape[2]).mean(axis=0)
         self.scale = x.reshape(-1, x.shape[2]).std(axis=0)
         self.scale[self.scale == 0] = 1.0
-        x = (x - self.mean) / self.scale
         budget = self.budget
-        generator = np.random.default_rng(budget.seed)
-        parameters = self._initialize(x.shape[2], generator)
-        first = {name: np.zeros_like(value) for name, value in parameters.items()}
-        second = {name: np.zeros_like(value) for name, value in parameters.items()}
-        step, self.losses = 0, []
-        for _ in range(budget.epochs):
-            order = generator.permutation(len(x))
-            epoch_loss = 0.0
-            for start in range(0, len(x), budget.batch_size):
-                batch = order[start:start + budget.batch_size]
-                loss, gradients = self.loss_and_gradients(x[batch], y[batch], parameters)
-                epoch_loss += loss * len(batch)
-                step += 1
-                for name, gradient in gradients.items():
-                    if name.startswith("w"):
-                        gradient = gradient + budget.weight_decay * parameters[name]
-                    first[name] = .9 * first[name] + .1 * gradient
-                    second[name] = .999 * second[name] + .001 * gradient ** 2
-                    corrected = first[name] / (1 - .9 ** step)
-                    variance = second[name] / (1 - .999 ** step)
-                    parameters[name] = parameters[name] - budget.learning_rate * corrected / (np.sqrt(variance) + 1e-8)
-            self.losses.append(epoch_loss / len(x))
-        self.parameters = parameters
-        self.updates = step
+        threads = torch.get_num_threads()
+        torch.set_num_threads(1)
+        try:
+            torch.manual_seed(budget.seed)
+            network = self._build(x.shape[2])
+            optimizer = torch.optim.AdamW(network.parameters(), lr=budget.learning_rate,
+                                          weight_decay=budget.weight_decay)
+            inputs, outputs = self._tensor(x), torch.as_tensor(y, dtype=torch.float32)
+            generator = torch.Generator().manual_seed(budget.seed)
+            self.losses, self.updates = [], 0
+            for _ in range(budget.epochs):
+                order = torch.randperm(len(inputs), generator=generator)
+                epoch_loss = 0.0
+                for start in range(0, len(inputs), budget.batch_size):
+                    batch = order[start:start + budget.batch_size]
+                    optimizer.zero_grad()
+                    loss = torch.nn.functional.mse_loss(network(inputs[batch]), outputs[batch])
+                    loss.backward()
+                    optimizer.step()
+                    epoch_loss += loss.item() * len(batch)
+                    self.updates += 1
+                self.losses.append(epoch_loss / len(inputs))
+        finally:
+            torch.set_num_threads(threads)
+        self.network = network.eval()
         return self
 
+    def hidden(self, sequences):
+        """Final-layer activations per session, for causality checks."""
+        import torch
+        with torch.no_grad():
+            return self.network.hidden(self._tensor(sequences)).numpy()
+
     def predict(self, sequences):
-        if self.parameters is None:
+        import torch
+        if self.network is None:
             raise RuntimeError("The network must be fitted before prediction")
-        x = (np.asarray(sequences, dtype=float) - self.mean) / self.scale
-        return self._forward(x, self.parameters)[0]
+        with torch.no_grad():
+            return self.network(self._tensor(sequences)).numpy().astype(float)
 
 
 def sequence_channels(bars: Sequence[DailyBar], spy_bars: Sequence[DailyBar],

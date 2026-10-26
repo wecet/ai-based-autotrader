@@ -11,24 +11,6 @@ from trading.temporal import TemporalConvNet, TrainingBudget, build_sequences, s
 TINY = TrainingBudget(epochs=3, batch_size=64, hidden=4, dilations=(1, 2))
 
 
-def test_gradients_match_finite_differences():
-    generator = np.random.default_rng(1)
-    network = TemporalConvNet(TrainingBudget(hidden=3, dilations=(1, 2), kernel=2))
-    x, y = generator.normal(size=(5, 6, 2)), generator.normal(size=5)
-    parameters = network._initialize(2, generator)
-    for name in parameters:
-        parameters[name] = parameters[name] + generator.normal(0, .1, np.shape(parameters[name]))
-    _, gradients = network.loss_and_gradients(x, y, parameters)
-    for name, value in parameters.items():
-        flat = np.asarray(value, dtype=float).reshape(-1)
-        for index in range(min(flat.size, 6)):
-            def loss_at(delta):
-                trial = {**parameters, name: (flat + np.eye(flat.size)[index] * delta).reshape(np.shape(value))}
-                return network.loss_and_gradients(x, y, trial)[0]
-            numeric = (loss_at(1e-6) - loss_at(-1e-6)) / 2e-6
-            assert np.asarray(gradients[name]).reshape(-1)[index] == pytest.approx(numeric, rel=1e-4, abs=1e-7)
-
-
 def test_network_is_causal_and_deterministic():
     generator = np.random.default_rng(2)
     x, y = generator.normal(size=(200, 12, 3)), generator.normal(size=200)
@@ -37,11 +19,10 @@ def test_network_is_causal_and_deterministic():
     np.testing.assert_array_equal(first.predict(x), second.predict(x))
     assert first.updates == 3 * 4
     probe = x[:3].copy()
-    _, hidden, _ = first._forward((probe - first.mean) / first.scale, first.parameters)
     changed = probe.copy()
     changed[:, 8:] += 5
-    _, altered, _ = first._forward((changed - first.mean) / first.scale, first.parameters)
-    np.testing.assert_array_equal(hidden[:, :8], altered[:, :8])
+    np.testing.assert_array_equal(first.hidden(probe)[:, :8], first.hidden(changed)[:, :8])
+    assert not np.array_equal(first.hidden(probe)[:, 8:], first.hidden(changed)[:, 8:])
 
 
 def test_network_learns_a_simple_sequence_signal():
