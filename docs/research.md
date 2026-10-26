@@ -276,13 +276,14 @@ dominates, and the composite rarely trades. Treat this as a pipeline check only.
 
 ## Compact temporal network
 
-`trading/temporal.py` implements a small temporal convolutional network in NumPy,
-so no deep-learning dependency is required. It has three dilated causal
-convolution layers (kernel 3, dilations 1/2/4, width 8, ReLU) read out at the
-final session. Gradients are written by hand and checked against finite
-differences in the tests. The `TrainingBudget` is declared before training: 20
-epochs, batch 256, Adam with learning rate 0.001, weight decay 0.0001, seed 0.
-Channel standardization is fitted on each training fold only.
+`trading/temporal.py` implements a small temporal convolutional network in
+PyTorch. It has three dilated causal convolution layers (kernel 3, dilations
+1/2/4, width 8, ReLU, left-only padding) read out at the final session. Training
+runs on the CPU with one thread and a fixed seed, so refits are reproducible.
+Docker installs CPU-only torch wheels from the PyTorch index (see
+`[tool.uv.sources]` in `pyproject.toml`). The `TrainingBudget` is declared before
+training: 20 epochs, batch 256, AdamW with learning rate 0.001, weight decay
+0.0001, seed 0. Channel standardization is fitted on each training fold only.
 
 Each input is the last 32 sessions of four channels: daily return, return minus
 SPY, return minus the group benchmark, and log volume relative to its 20-session
@@ -299,7 +300,7 @@ training seconds, updates, examples, final loss, and share of refits with a flat
 calibration) and `history_sufficiency`. Results on fewer than 1,260 sessions
 (about five years) are flagged `interpretable: false` and should not be read as
 evidence. Build a longer dataset with `research.build_dataset` first. The
-synthetic demo refits in about 0.2 seconds per session.
+synthetic demo refits in about 0.3 seconds per session.
 
 ## Allocation comparison
 
